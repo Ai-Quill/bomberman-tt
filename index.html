@@ -67,6 +67,23 @@
             font-size: 18px;
             text-align: center;
         }
+        #soundToggle {
+            position: absolute;
+            top: 10px;
+            right: 120px;
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            z-index: 100;
+            transition: background-color 0.3s;
+        }
+        #soundToggle:hover {
+            background-color: #45a049;
+        }
     </style>
 </head>
 <body>
@@ -79,6 +96,7 @@
         Scroll: Zoom
     </div>
     <button id="resetButton" onclick="window.location.reload()">Reset Game</button>
+    <button id="soundToggle" onclick="toggleSound()">Sound: ON</button>
     <div id="error"></div>
 
     <script type="importmap">
@@ -93,6 +111,602 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Sound Manager
+        class SoundManager {
+            constructor() {
+                // Initialize Web Audio API
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.isMuted = false;
+                this.sounds = {};
+                
+                // Create master gain node for volume control
+                this.masterGain = this.audioContext.createGain();
+                this.masterGain.gain.value = 1.0;
+                this.masterGain.connect(this.audioContext.destination);
+                
+                console.log('Sound manager initialized with Web Audio API');
+            }
+            
+            // Play a sound by type
+            play(soundType) {
+                if (this.isMuted) {
+                    console.log(`Sound ${soundType} not played because sound is muted`);
+                    return;
+                }
+                
+                console.log(`Playing sound: ${soundType}`);
+                
+                try {
+                    switch (soundType) {
+                        case 'bgMusic':
+                            this.playBackgroundMusic();
+                            break;
+                        case 'playerMove':
+                            this.loadAndPlayAudio('assets/sounds/player_footstep.mp3', false, 0.3);
+                            break;
+                        case 'playerHit':
+                            this.loadAndPlayAudio('assets/sounds/player_death.mp3', false, 0.3);
+                            break;
+                        case 'playerDeath':
+                            this.loadAndPlayAudio('assets/sounds/player_death.mp3', false, 0.7);
+                            break;
+                        case 'bombPlace':
+                            this.loadAndPlayAudio('assets/sounds/bomb_place.mp3', false, 0.4);
+                            break;
+                        case 'bombExplode':
+                            this.loadAndPlayAudio('assets/sounds/bomb_explosion.mp3', false, 0.7);
+                            break;
+                        case 'powerUp':
+                            this.loadAndPlayAudio('assets/sounds/powerup_collect.mp3', false, 0.5);
+                            break;
+                        case 'enemyDeath':
+                            this.loadAndPlayAudio('assets/sounds/enemy_death.mp3', false, 0.5);
+                            break;
+                        case 'levelComplete':
+                            this.loadAndPlayAudio('assets/sounds/level_complete.mp3', false, 0.6);
+                            break;
+                        case 'gameOver':
+                            this.loadAndPlayAudio('assets/sounds/game_over.mp3', false, 0.7);
+                            break;
+                        default:
+                            console.warn(`Unknown sound type: ${soundType}`);
+                    }
+                } catch (error) {
+                    console.error(`Error playing sound ${soundType}:`, error);
+                }
+            }
+            
+            // Stop a sound
+            stop(soundType) {
+                if (soundType === 'bgMusic') {
+                    this.stopBackgroundMusic();
+                }
+            }
+            
+            // Play a simple tone
+            playTone(frequency, duration, type = 'sine', volume = 0.5, sweep = false) {
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.type = type;
+                oscillator.frequency.value = frequency;
+                
+                if (sweep) {
+                    oscillator.frequency.exponentialRampToValueAtTime(
+                        frequency * 2,
+                        this.audioContext.currentTime + duration
+                    );
+                }
+                
+                gainNode.gain.value = volume;
+                
+                // Apply fade out
+                gainNode.gain.exponentialRampToValueAtTime(
+                    0.001,
+                    this.audioContext.currentTime + duration
+                );
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.masterGain);
+                
+                oscillator.start();
+                oscillator.stop(this.audioContext.currentTime + duration);
+            }
+            
+            // Play noise (white, pink, etc.)
+            playNoise(duration, type = 'white', volume = 0.5) {
+                const bufferSize = 2 * this.audioContext.sampleRate;
+                const noiseBuffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                
+                // Fill buffer with noise
+                for (let i = 0; i < bufferSize; i++) {
+                    if (type === 'white') {
+                        output[i] = Math.random() * 2 - 1;
+                    } else if (type === 'pink') {
+                        output[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+                    }
+                }
+                
+                const noise = this.audioContext.createBufferSource();
+                noise.buffer = noiseBuffer;
+                
+                const gainNode = this.audioContext.createGain();
+                gainNode.gain.value = volume;
+                
+                // Apply fade out
+                gainNode.gain.exponentialRampToValueAtTime(
+                    0.001,
+                    this.audioContext.currentTime + duration
+                );
+                
+                noise.connect(gainNode);
+                gainNode.connect(this.masterGain);
+                
+                noise.start();
+                noise.stop(this.audioContext.currentTime + duration);
+            }
+            
+            // Play explosion sound
+            playExplosion(duration, volume = 0.7) {
+                // Create noise for the explosion
+                this.playNoise(duration, 'white', volume);
+                
+                // Add a low frequency rumble
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 60;
+                
+                gainNode.gain.value = volume;
+                
+                // Apply envelope
+                gainNode.gain.exponentialRampToValueAtTime(
+                    volume,
+                    this.audioContext.currentTime + 0.1
+                );
+                gainNode.gain.exponentialRampToValueAtTime(
+                    0.001,
+                    this.audioContext.currentTime + duration
+                );
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.masterGain);
+                
+                oscillator.start();
+                oscillator.stop(this.audioContext.currentTime + duration);
+                
+                // Add a high-pitched impact sound at the beginning
+                const impactOsc = this.audioContext.createOscillator();
+                const impactGain = this.audioContext.createGain();
+                
+                impactOsc.type = 'sawtooth';
+                impactOsc.frequency.value = 220;
+                impactOsc.frequency.exponentialRampToValueAtTime(
+                    20,
+                    this.audioContext.currentTime + 0.2
+                );
+                
+                impactGain.gain.value = volume * 0.8;
+                impactGain.gain.exponentialRampToValueAtTime(
+                    0.001,
+                    this.audioContext.currentTime + 0.3
+                );
+                
+                impactOsc.connect(impactGain);
+                impactGain.connect(this.masterGain);
+                
+                impactOsc.start();
+                impactOsc.stop(this.audioContext.currentTime + 0.3);
+                
+                // Add some mid-range crackle
+                setTimeout(() => {
+                    for (let i = 0; i < 5; i++) {
+                        setTimeout(() => {
+                            const crackleOsc = this.audioContext.createOscillator();
+                            const crackleGain = this.audioContext.createGain();
+                            
+                            crackleOsc.type = 'square';
+                            crackleOsc.frequency.value = 100 + Math.random() * 400;
+                            
+                            crackleGain.gain.value = volume * 0.3 * Math.random();
+                            crackleGain.gain.exponentialRampToValueAtTime(
+                                0.001,
+                                this.audioContext.currentTime + 0.1
+                            );
+                            
+                            crackleOsc.connect(crackleGain);
+                            crackleGain.connect(this.masterGain);
+                            
+                            crackleOsc.start();
+                            crackleOsc.stop(this.audioContext.currentTime + 0.1);
+                        }, i * 50 + Math.random() * 50);
+                    }
+                }, 100);
+            }
+            
+            // Play success sound for level complete
+            playSuccess(volume = 0.6) {
+                const now = this.audioContext.currentTime;
+                
+                // Play a sequence of ascending tones
+                this.playToneAt(523.25, 0.1, 'sine', volume, now); // C5
+                this.playToneAt(659.25, 0.1, 'sine', volume, now + 0.1); // E5
+                this.playToneAt(783.99, 0.1, 'sine', volume, now + 0.2); // G5
+                this.playToneAt(1046.50, 0.3, 'sine', volume, now + 0.3); // C6
+            }
+            
+            // Play game over sound
+            playGameOver(volume = 0.7) {
+                const now = this.audioContext.currentTime;
+                
+                // Play a sequence of descending tones
+                const notes = [493.88, 392.00, 329.63, 261.63]; // B4, G4, E4, C4
+                const durations = [0.3, 0.3, 0.3, 1.0];
+                
+                // Play each note
+                let timeOffset = 0;
+                for (let i = 0; i < notes.length; i++) {
+                    const noteOsc = this.audioContext.createOscillator();
+                    const noteGain = this.audioContext.createGain();
+                    
+                    noteOsc.type = 'sine';
+                    noteOsc.frequency.value = notes[i];
+                    
+                    noteGain.gain.value = volume * (1 - i * 0.1);
+                    noteGain.gain.setValueAtTime(volume * (1 - i * 0.1), now + timeOffset);
+                    noteGain.gain.exponentialRampToValueAtTime(
+                        0.001,
+                        now + timeOffset + durations[i]
+                    );
+                    
+                    noteOsc.connect(noteGain);
+                    noteGain.connect(this.masterGain);
+                    
+                    noteOsc.start(now + timeOffset);
+                    noteOsc.stop(now + timeOffset + durations[i]);
+                    
+                    timeOffset += durations[i];
+                }
+                
+                // Add a low rumble at the end
+                setTimeout(() => {
+                    const rumbleOsc = this.audioContext.createOscillator();
+                    const rumbleGain = this.audioContext.createGain();
+                    
+                    rumbleOsc.type = 'sine';
+                    rumbleOsc.frequency.value = 40;
+                    
+                    rumbleGain.gain.value = volume * 0.5;
+                    rumbleGain.gain.exponentialRampToValueAtTime(
+                        0.001,
+                        this.audioContext.currentTime + 2.0
+                    );
+                    
+                    rumbleOsc.connect(rumbleGain);
+                    rumbleGain.connect(this.masterGain);
+                    
+                    rumbleOsc.start();
+                    rumbleOsc.stop(this.audioContext.currentTime + 2.0);
+                }, timeOffset * 1000);
+            }
+            
+            // Helper to play a tone at a specific time
+            playToneAt(frequency, duration, type = 'sine', volume = 0.5, startTime) {
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.type = type;
+                oscillator.frequency.value = frequency;
+                
+                gainNode.gain.value = volume;
+                
+                // Apply fade out
+                gainNode.gain.setValueAtTime(volume, startTime);
+                gainNode.gain.exponentialRampToValueAtTime(
+                    0.001,
+                    startTime + duration
+                );
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.masterGain);
+                
+                oscillator.start(startTime);
+                oscillator.stop(startTime + duration);
+            }
+            
+            // Play background music
+            playBackgroundMusic() {
+                if (this.bgMusicSource) {
+                    // Already playing
+                    return;
+                }
+                
+                console.log('Starting background music');
+                
+                // Load and play the background music file
+                this.loadAndPlayAudio('assets/sounds/background_rhythm_guitar.mp3', true, 0.5);
+            }
+            
+            // Load and play an audio file
+            loadAndPlayAudio(url, loop = false, volume = 1.0) {
+                // Create a new audio buffer source
+                fetch(url)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`Failed to load audio file: ${url}`);
+                        }
+                        return response.arrayBuffer();
+                    })
+                    .then(arrayBuffer => this.audioContext.decodeAudioData(arrayBuffer))
+                    .then(audioBuffer => {
+                        // Create a source node
+                        const source = this.audioContext.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.loop = loop;
+                        
+                        // Create a gain node for volume control
+                        const gainNode = this.audioContext.createGain();
+                        gainNode.gain.value = volume;
+                        
+                        // Connect the source to the gain node and the gain node to the master gain
+                        source.connect(gainNode);
+                        gainNode.connect(this.masterGain);
+                        
+                        // Store the source if it's background music
+                        if (url.includes('background')) {
+                            this.bgMusicSource = source;
+                        }
+                        
+                        // Start playing
+                        source.start();
+                        console.log(`Playing audio file: ${url}`);
+                        
+                        // Set up cleanup when the audio ends (if not looping)
+                        if (!loop) {
+                            source.onended = () => {
+                                if (url.includes('background')) {
+                                    this.bgMusicSource = null;
+                                }
+                                console.log(`Audio file finished: ${url}`);
+                            };
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading audio:', error);
+                    });
+            }
+            
+            // Create a continuous drone bass sound
+            createDroneBass() {
+                const fundamental = 65.41; // C2
+                const fifth = 98.00;       // G2
+                
+                // Create oscillators for the drone
+                const createDroneOsc = (freq, type, volume) => {
+                    const osc = this.audioContext.createOscillator();
+                    const gain = this.audioContext.createGain();
+                    
+                    osc.type = type;
+                    osc.frequency.value = freq;
+                    
+                    // Add slight detuning for richness
+                    osc.detune.value = Math.random() * 10 - 5;
+                    
+                    gain.gain.value = 0;
+                    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+                    gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 3);
+                    
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    
+                    osc.start();
+                    
+                    return { oscillator: osc, gainNode: gain };
+                };
+                
+                // Create multiple oscillators for a rich sound
+                this.droneOscillators = [
+                    createDroneOsc(fundamental, 'sine', 0.15),
+                    createDroneOsc(fundamental * 2, 'sine', 0.1),
+                    createDroneOsc(fifth, 'sine', 0.08),
+                    createDroneOsc(fundamental, 'triangle', 0.03)
+                ];
+                
+                // Add subtle modulation to the drone
+                this.startDroneModulation();
+            }
+            
+            // Add subtle modulation to the drone for movement
+            startDroneModulation() {
+                const modulationSpeed = 0.1; // Hz
+                let phase = 0;
+                
+                this.droneModulationInterval = setInterval(() => {
+                    if (this.isMuted) return;
+                    
+                    phase += 0.05;
+                    const modValue = Math.sin(phase) * 0.05 + 0.95;
+                    
+                    // Apply subtle volume modulation to each oscillator
+                    this.droneOscillators.forEach(drone => {
+                        drone.gainNode.gain.linearRampToValueAtTime(
+                            drone.gainNode.gain.value * modValue,
+                            this.audioContext.currentTime + 0.1
+                        );
+                    });
+                }, 100);
+            }
+            
+            // Create ambient pad sounds that fade in and out
+            createAmbientPads() {
+                // Notes in a pentatonic scale
+                const padNotes = [
+                    130.81, // C3
+                    146.83, // D3
+                    164.81, // E3
+                    196.00, // G3
+                    220.00  // A3
+                ];
+                
+                const createPad = () => {
+                    if (this.isMuted) return;
+                    
+                    // Choose a random note from the scale
+                    const note = padNotes[Math.floor(Math.random() * padNotes.length)];
+                    
+                    // Create oscillator for pad
+                    const osc = this.audioContext.createOscillator();
+                    const gain = this.audioContext.createGain();
+                    
+                    // Use sine wave for smooth pad sound
+                    osc.type = 'sine';
+                    osc.frequency.value = note;
+                    
+                    // Add slight detuning
+                    osc.detune.value = Math.random() * 20 - 10;
+                    
+                    // Create fade in/out envelope
+                    const now = this.audioContext.currentTime;
+                    const duration = 8 + Math.random() * 8; // 8-16 seconds
+                    const volume = 0.05 + Math.random() * 0.05;
+                    
+                    gain.gain.setValueAtTime(0, now);
+                    gain.gain.linearRampToValueAtTime(volume, now + 2);
+                    gain.gain.setValueAtTime(volume, now + duration - 2);
+                    gain.gain.linearRampToValueAtTime(0, now + duration);
+                    
+                    // Add filter for warmth
+                    const filter = this.audioContext.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 1000 + Math.random() * 2000;
+                    filter.Q.value = 1;
+                    
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.masterGain);
+                    
+                    osc.start();
+                    osc.stop(now + duration);
+                    
+                    // Schedule next pad
+                    const nextPadTime = 4 + Math.random() * 4; // 4-8 seconds
+                    this.padTimeouts = this.padTimeouts || [];
+                    this.padTimeouts.push(setTimeout(createPad, nextPadTime * 1000));
+                };
+                
+                // Start the first pad
+                createPad();
+            }
+            
+            // Create occasional bell-like tones
+            createBellTones() {
+                // Notes in a pentatonic scale (higher octave)
+                const bellNotes = [
+                    523.25, // C5
+                    587.33, // D5
+                    659.25, // E5
+                    783.99, // G5
+                    880.00  // A5
+                ];
+                
+                const playBell = () => {
+                    if (this.isMuted) return;
+                    
+                    // Choose a random note from the scale
+                    const note = bellNotes[Math.floor(Math.random() * bellNotes.length)];
+                    
+                    // Create oscillator for bell sound
+                    const osc = this.audioContext.createOscillator();
+                    const gain = this.audioContext.createGain();
+                    
+                    // Use sine wave for bell-like tone
+                    osc.type = 'sine';
+                    osc.frequency.value = note;
+                    
+                    // Create quick attack, long decay envelope
+                    const now = this.audioContext.currentTime;
+                    const volume = 0.1;
+                    
+                    gain.gain.setValueAtTime(0, now);
+                    gain.gain.linearRampToValueAtTime(volume, now + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 2);
+                    
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    
+                    osc.start();
+                    osc.stop(now + 2);
+                    
+                    // Schedule next bell
+                    const nextBellTime = 5 + Math.random() * 10; // 5-15 seconds
+                    this.bellTimeouts = this.bellTimeouts || [];
+                    this.bellTimeouts.push(setTimeout(playBell, nextBellTime * 1000));
+                };
+                
+                // Start the first bell after a delay
+                this.bellTimeouts = [setTimeout(playBell, 2000)];
+            }
+            
+            // Stop background music
+            stopBackgroundMusic() {
+                // Stop drone oscillators
+                if (this.droneOscillators) {
+                    this.droneOscillators.forEach(drone => {
+                        try {
+                            drone.oscillator.stop();
+                            drone.gainNode.disconnect();
+                        } catch (e) {
+                            console.log('Error stopping drone oscillator:', e);
+                        }
+                    });
+                    this.droneOscillators = null;
+                }
+                
+                // Clear drone modulation interval
+                if (this.droneModulationInterval) {
+                    clearInterval(this.droneModulationInterval);
+                    this.droneModulationInterval = null;
+                }
+                
+                // Clear pad timeouts
+                if (this.padTimeouts) {
+                    this.padTimeouts.forEach(timeout => clearTimeout(timeout));
+                    this.padTimeouts = null;
+                }
+                
+                // Clear bell timeouts
+                if (this.bellTimeouts) {
+                    this.bellTimeouts.forEach(timeout => clearTimeout(timeout));
+                    this.bellTimeouts = null;
+                }
+                
+                // Clear other timeouts for backward compatibility
+                if (this.melodyTimeout) clearTimeout(this.melodyTimeout);
+                if (this.bassTimeout) clearTimeout(this.bassTimeout);
+                if (this.drumsTimeout) clearTimeout(this.drumsTimeout);
+                
+                this.melodyTimeout = null;
+                this.bassTimeout = null;
+                this.drumsTimeout = null;
+            }
+        }
+        
+        // Global sound manager
+        let soundManager;
+        
+        // Toggle sound function for the sound button
+        function toggleSound() {
+            if (!soundManager) return;
+            
+            if (soundManager.isMuted) {
+                soundManager.unmute();
+            } else {
+                soundManager.mute();
+            }
+        }
 
         // Texture loader
         const textureLoader = new THREE.TextureLoader();
@@ -133,6 +747,18 @@
             errorDiv.style.padding = '20px';
             errorDiv.style.borderRadius = '5px';
             console.error(message);
+            
+            // Play game over sound if it's a game over message
+            if (message.includes('Game Over') && soundManager) {
+                // Stop background music
+                soundManager.stop('bgMusic');
+                
+                // Play game over sound if not already played
+                if (!errorDiv.dataset.soundPlayed) {
+                    soundManager.play('gameOver');
+                    errorDiv.dataset.soundPlayed = 'true';
+                }
+            }
         }
 
         // Game constants
@@ -156,6 +782,9 @@
         function init() {
             try {
                 console.log('Initializing game...');
+                
+                // Initialize sound manager
+                soundManager = new SoundManager();
                 
                 // Create Three.js scene
                 scene = new THREE.Scene();
@@ -222,6 +851,9 @@
                 // Force initial render
                 renderer.render(scene, camera);
                 console.log('Initial render complete');
+                
+                // Start background music
+                soundManager.play('bgMusic');
 
             } catch (error) {
                 console.error('Error during initialization:', error);
@@ -784,8 +1416,8 @@
                     return false;
                 }
                 
-                // Check if cell is empty
-                return this.grid[y][x] === 0;
+                // Check if cell is empty or has an explosion (player can walk through explosions)
+                return this.grid[y][x] === 0 || this.grid[y][x] === 4;
             }
             
             setCellType(x, y, type) {
@@ -999,11 +1631,22 @@
                 // Check for collision with enemies
                 if (!this.isInvulnerable) {
                     for (const entity of this.grid.entities) {
-                        if (entity instanceof Enemy && 
-                            entity.gridX === this.gridX && 
-                            entity.gridY === this.gridY) {
-                            this.takeDamage();
-                            break;
+                        if (entity instanceof Enemy && entity.isAlive) {
+                            // Check if player and enemy are in the same grid cell
+                            if (entity.gridX === this.gridX && entity.gridY === this.gridY) {
+                                this.takeDamage();
+                                break;
+                            }
+                            
+                            // Also check for close proximity in world space for smoother collision detection
+                            const dx = this.x - entity.x;
+                            const dz = this.z - entity.z;
+                            const distance = Math.sqrt(dx * dx + dz * dz);
+                            
+                            if (distance < 0.5) { // If within half a cell size
+                                this.takeDamage();
+                                break;
+                            }
                         }
                     }
                 }
@@ -1042,6 +1685,11 @@
                     this.targetX = worldPos.x;
                     this.targetZ = worldPos.z;
                     this.isMoving = true;
+                    
+                    // Play movement sound
+                    if (soundManager) {
+                        soundManager.play('playerMove');
+                    }
                     
                     // Rotate player model based on direction
                     switch(direction) {
@@ -1098,6 +1746,9 @@
                 if (this.lives <= 0) {
                     this.die();
                 } else {
+                    // Create hit effect particles
+                    this.createHitEffect();
+                    
                     // Invulnerability period
                     this.isInvulnerable = true;
                     
@@ -1121,13 +1772,244 @@
                             this.materials.head.opacity = 1;
                         }
                     }, 100);
+                    
+                    // Play hit sound
+                    if (soundManager) {
+                        soundManager.play('playerHit');
+                    }
                 }
             }
             
+            createHitEffect() {
+                // Create particle effect for hit
+                const particleCount = 15;
+                const particles = new THREE.Group();
+                
+                for (let i = 0; i < particleCount; i++) {
+                    // Create small particle
+                    const size = 0.05 + Math.random() * 0.05;
+                    const geometry = new THREE.SphereGeometry(size, 8, 8);
+                    
+                    // Red particles for hit effect
+                    const material = new THREE.MeshStandardMaterial({
+                        color: 0xff0000,
+                        emissive: 0xff0000,
+                        emissiveIntensity: 0.5,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    
+                    const particle = new THREE.Mesh(geometry, material);
+                    
+                    // Random position within player
+                    particle.position.set(
+                        (Math.random() - 0.5) * 0.5,
+                        Math.random() * 0.7,
+                        (Math.random() - 0.5) * 0.5
+                    );
+                    
+                    // Random velocity
+                    particle.userData.velocity = {
+                        x: (Math.random() - 0.5) * 0.03,
+                        y: 0.01 + Math.random() * 0.02,
+                        z: (Math.random() - 0.5) * 0.03
+                    };
+                    
+                    // Add to particle group
+                    particles.add(particle);
+                }
+                
+                // Position particle group at player position
+                particles.position.set(this.x, this.y, this.z);
+                scene.add(particles);
+                
+                // Add particle system to grid entities for updating
+                const particleSystem = {
+                    mesh: particles,
+                    lifetime: 800, // 0.8 seconds
+                    update: function(deltaTime) {
+                        this.lifetime -= deltaTime;
+                        
+                        if (this.lifetime <= 0) {
+                            // Remove particles when done
+                            scene.remove(particles);
+                            grid.removeEntity(this);
+                            
+                            // Dispose of geometries and materials
+                            particles.children.forEach(particle => {
+                                if (particle.geometry) particle.geometry.dispose();
+                                if (particle.material) particle.material.dispose();
+                            });
+                            
+                            return;
+                        }
+                        
+                        // Update each particle
+                        particles.children.forEach(particle => {
+                            // Move particle based on velocity
+                            particle.position.x += particle.userData.velocity.x;
+                            particle.position.y += particle.userData.velocity.y;
+                            particle.position.z += particle.userData.velocity.z;
+                            
+                            // Apply gravity
+                            particle.userData.velocity.y -= 0.0005;
+                            
+                            // Fade out
+                            if (particle.material) {
+                                particle.material.opacity = this.lifetime / 800;
+                            }
+                        });
+                    }
+                };
+                
+                this.grid.addEntity(particleSystem);
+            }
+            
             die() {
-                scene.remove(this.mesh);
-                this.grid.removeEntity(this);
-                showError('Game Over! You ran out of lives. Refresh to restart.');
+                // Create death explosion effect
+                this.createDeathEffect();
+                
+                // Play death sound
+                if (soundManager) {
+                    soundManager.play('playerDeath');
+                }
+                
+                // Remove player from scene after a short delay
+                setTimeout(() => {
+                    scene.remove(this.mesh);
+                    this.grid.removeEntity(this);
+                    showError('Game Over! You ran out of lives. Refresh to restart.');
+                }, 1000);
+            }
+            
+            createDeathEffect() {
+                // Create a larger explosion effect for death
+                const particleCount = 30;
+                const particles = new THREE.Group();
+                
+                // Create explosion ring
+                const ringGeometry = new THREE.RingGeometry(0.2, 0.8, 16);
+                const ringMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xff5500,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                ring.rotation.x = Math.PI / 2;
+                ring.position.y = 0.1;
+                particles.add(ring);
+                
+                // Create particles
+                for (let i = 0; i < particleCount; i++) {
+                    // Create particle
+                    const size = 0.08 + Math.random() * 0.08;
+                    const geometry = new THREE.SphereGeometry(size, 8, 8);
+                    
+                    // Random color between red and yellow
+                    const color = new THREE.Color(
+                        1,
+                        Math.random() * 0.7,
+                        Math.random() * 0.2
+                    );
+                    
+                    const material = new THREE.MeshStandardMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.7,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    
+                    const particle = new THREE.Mesh(geometry, material);
+                    
+                    // Random position
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 0.1 + Math.random() * 0.3;
+                    particle.position.set(
+                        Math.cos(angle) * radius,
+                        Math.random() * 0.8,
+                        Math.sin(angle) * radius
+                    );
+                    
+                    // Velocity outward from center
+                    const speed = 0.01 + Math.random() * 0.02;
+                    particle.userData.velocity = {
+                        x: Math.cos(angle) * speed,
+                        y: 0.01 + Math.random() * 0.02,
+                        z: Math.sin(angle) * speed
+                    };
+                    
+                    particles.add(particle);
+                }
+                
+                // Position at player
+                particles.position.set(this.x, this.y, this.z);
+                scene.add(particles);
+                
+                // Add light flash
+                const light = new THREE.PointLight(0xff5500, 2, 5);
+                light.position.set(this.x, this.y + 0.5, this.z);
+                scene.add(light);
+                
+                // Add particle system to grid entities for updating
+                const particleSystem = {
+                    mesh: particles,
+                    light: light,
+                    lifetime: 1000, // 1 second
+                    ringScale: 1,
+                    update: function(deltaTime) {
+                        this.lifetime -= deltaTime;
+                        
+                        if (this.lifetime <= 0) {
+                            // Remove particles and light when done
+                            scene.remove(particles);
+                            scene.remove(light);
+                            grid.removeEntity(this);
+                            
+                            // Dispose of geometries and materials
+                            particles.children.forEach(particle => {
+                                if (particle.geometry) particle.geometry.dispose();
+                                if (particle.material) particle.material.dispose();
+                            });
+                            
+                            return;
+                        }
+                        
+                        // Expand ring
+                        this.ringScale += 0.05;
+                        const ring = particles.children[0];
+                        ring.scale.set(this.ringScale, this.ringScale, this.ringScale);
+                        ring.material.opacity = this.lifetime / 1000;
+                        
+                        // Fade light
+                        light.intensity = 2 * (this.lifetime / 1000);
+                        
+                        // Update particles (skip the ring which is at index 0)
+                        for (let i = 1; i < particles.children.length; i++) {
+                            const particle = particles.children[i];
+                            
+                            // Move particle based on velocity
+                            particle.position.x += particle.userData.velocity.x;
+                            particle.position.y += particle.userData.velocity.y;
+                            particle.position.z += particle.userData.velocity.z;
+                            
+                            // Apply gravity
+                            particle.userData.velocity.y -= 0.0005;
+                            
+                            // Fade out
+                            if (particle.material) {
+                                particle.material.opacity = this.lifetime / 1000;
+                            }
+                        }
+                    }
+                };
+                
+                this.grid.addEntity(particleSystem);
+                
+                // Hide player mesh
+                this.mesh.visible = false;
             }
             
             updateLivesDisplay() {
@@ -1136,6 +2018,11 @@
             }
             
             collectPowerUp(type) {
+                // Play power-up sound
+                if (soundManager) {
+                    soundManager.play('powerUp');
+                }
+                
                 switch(type) {
                     case 'bomb':
                         this.bombCount++;
@@ -1190,6 +2077,11 @@
                 
                 // Add to grid entities for updating
                 grid.addEntity(this);
+                
+                // Play bomb placement sound
+                if (soundManager) {
+                    soundManager.play('bombPlace');
+                }
                 
                 console.log("Bomb placed at", x, y);
             }
@@ -1311,6 +2203,11 @@
                 // Mark as exploded
                 this.exploded = true;
                 
+                // Play explosion sound
+                if (soundManager) {
+                    soundManager.play('bombExplode');
+                }
+                
                 // Create explosion at bomb position
                 new Explosion(this.grid, this.gridX, this.gridY, this.range);
                 
@@ -1335,6 +2232,19 @@
                 
                 // Create explosion center
                 this.createExplosionPart(x, y, 'center');
+                
+                // Check if player is at the center of the explosion
+                const entitiesAtCenter = this.grid.entities.filter(entity => 
+                    entity.gridX === x && entity.gridY === y
+                );
+                
+                for (const entity of entitiesAtCenter) {
+                    if (entity instanceof Player && !entity.isInvulnerable) {
+                        entity.takeDamage();
+                    } else if (entity instanceof Enemy && entity.isAlive) {
+                        entity.die();
+                    }
+                }
                 
                 // Propagate explosion in four directions
                 this.propagateExplosion(x, y, 1, 0, range);  // Right
@@ -1454,24 +2364,74 @@
                 // Add to scene
                 scene.add(mesh);
                 
-                // Store mesh and position for later removal
-                this.parts.push({
-                    x: x,
-                    y: y,
-                    mesh: mesh
-                });
+                // Create particles for more dramatic effect
+                const particles = this.createExplosionParticles(worldPos);
                 
                 // Add a small light source at explosion for dramatic effect
-                const light = new THREE.PointLight(0xff5500, 1, 3);
+                const light = new THREE.PointLight(0xff5500, 1.5, 3);
                 light.position.set(worldPos.x, worldPos.y + 0.5, worldPos.z);
                 scene.add(light);
                 
-                // Also store the light for removal
+                // Store mesh, particles and position for later removal
                 this.parts.push({
                     x: x,
                     y: y,
-                    mesh: light
+                    mesh: mesh,
+                    particles: particles,
+                    light: light
                 });
+            }
+            
+            createExplosionParticles(worldPos) {
+                const particleCount = 12;
+                const particles = new THREE.Group();
+                
+                for (let i = 0; i < particleCount; i++) {
+                    // Create small particle
+                    const size = 0.05 + Math.random() * 0.08;
+                    const geometry = new THREE.SphereGeometry(size, 8, 8);
+                    
+                    // Random color between red and yellow for fire effect
+                    const color = new THREE.Color(
+                        1,
+                        Math.random() * 0.7,
+                        Math.random() * 0.2
+                    );
+                    
+                    const material = new THREE.MeshStandardMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.7,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    
+                    const particle = new THREE.Mesh(geometry, material);
+                    
+                    // Random position
+                    particle.position.set(
+                        (Math.random() - 0.5) * 0.7,
+                        Math.random() * 0.5,
+                        (Math.random() - 0.5) * 0.7
+                    );
+                    
+                    // Random velocity
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 0.01 + Math.random() * 0.02;
+                    particle.userData.velocity = {
+                        x: Math.cos(angle) * speed,
+                        y: 0.01 + Math.random() * 0.02,
+                        z: Math.sin(angle) * speed
+                    };
+                    
+                    particles.add(particle);
+                }
+                
+                // Position at explosion center
+                particles.position.set(worldPos.x, worldPos.y + 0.3, worldPos.z);
+                scene.add(particles);
+                
+                return particles;
             }
             
             update(deltaTime) {
@@ -1484,10 +2444,32 @@
                     const opacity = this.lifetime / 500; // Fade based on remaining lifetime
                     
                     for (const part of this.parts) {
-                        if (part.mesh instanceof THREE.Mesh && part.mesh.material) {
+                        // Update main explosion mesh
+                        if (part.mesh && part.mesh.material) {
                             part.mesh.material.opacity = opacity;
-                        } else if (part.mesh instanceof THREE.PointLight) {
-                            part.mesh.intensity = opacity;
+                        }
+                        
+                        // Update light intensity
+                        if (part.light) {
+                            part.light.intensity = 1.5 * opacity;
+                        }
+                        
+                        // Update particles
+                        if (part.particles) {
+                            part.particles.children.forEach(particle => {
+                                // Move particle based on velocity
+                                particle.position.x += particle.userData.velocity.x;
+                                particle.position.y += particle.userData.velocity.y;
+                                particle.position.z += particle.userData.velocity.z;
+                                
+                                // Apply gravity
+                                particle.userData.velocity.y -= 0.0005;
+                                
+                                // Fade out
+                                if (particle.material) {
+                                    particle.material.opacity = opacity;
+                                }
+                            });
                         }
                     }
                 }
@@ -1508,16 +2490,30 @@
                         scene.remove(part.mesh);
                         
                         // Dispose of geometries and materials for meshes
-                        if (part.mesh instanceof THREE.Mesh) {
-                            if (part.mesh.geometry) part.mesh.geometry.dispose();
-                            if (part.mesh.material) {
-                                if (Array.isArray(part.mesh.material)) {
-                                    part.mesh.material.forEach(m => m.dispose());
-                                } else {
-                                    part.mesh.material.dispose();
-                                }
+                        if (part.mesh.geometry) part.mesh.geometry.dispose();
+                        if (part.mesh.material) {
+                            if (Array.isArray(part.mesh.material)) {
+                                part.mesh.material.forEach(m => m.dispose());
+                            } else {
+                                part.mesh.material.dispose();
                             }
                         }
+                    }
+                    
+                    // Remove light from scene
+                    if (part.light && scene.children.includes(part.light)) {
+                        scene.remove(part.light);
+                    }
+                    
+                    // Remove particles from scene
+                    if (part.particles && scene.children.includes(part.particles)) {
+                        scene.remove(part.particles);
+                        
+                        // Dispose of particle geometries and materials
+                        part.particles.children.forEach(particle => {
+                            if (particle.geometry) particle.geometry.dispose();
+                            if (particle.material) particle.material.dispose();
+                        });
                     }
                 }
                 
@@ -1968,6 +2964,11 @@
                 
                 console.log("Enemy dying at", this.gridX, this.gridY);
                 
+                // Play enemy death sound
+                if (soundManager) {
+                    soundManager.play('enemyDeath');
+                }
+                
                 // Start death animation
                 this.isDying = true;
                 this.deathTime = 0;
@@ -1978,9 +2979,6 @@
                 
                 // Create explosion particles
                 this.createDeathParticles();
-                
-                // Play sound (if we had sound)
-                // playSound('enemy-death');
             }
             
             createDeathParticles() {
@@ -2094,6 +3092,11 @@
         function startLevelTransition() {
             levelTransition = true;
             levelTransitionTime = 0;
+            
+            // Play level complete sound
+            if (soundManager) {
+                soundManager.play('levelComplete');
+            }
             
             // Create level complete text
             showLevelCompleteMessage();
