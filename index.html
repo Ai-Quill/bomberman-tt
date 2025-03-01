@@ -1,0 +1,2254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bomberman 3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000; /* Dark background to see if canvas is loading */
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            pointer-events: none;
+            z-index: 100;
+            font-size: 18px;
+            text-shadow: 2px 2px 2px rgba(0,0,0,0.5);
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+            font-size: 16px;
+        }
+        #resetButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            background-color: #ff3333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            z-index: 100;
+            transition: background-color 0.3s;
+        }
+        #resetButton:hover {
+            background-color: #ff0000;
+        }
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            background-color: rgba(255, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 5px;
+            display: none;
+            z-index: 100;
+            font-size: 18px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Level: 1 | Lives: 3 | Bombs: 1 | Range: 2</div>
+    <div id="controls">
+        Controls:<br>
+        WASD / Arrow Keys: Move<br>
+        Space: Place Bomb<br>
+        Mouse: Rotate Camera<br>
+        Scroll: Zoom
+    </div>
+    <button id="resetButton" onclick="window.location.reload()">Reset Game</button>
+    <div id="error"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Texture loader
+        const textureLoader = new THREE.TextureLoader();
+        
+        // Preload textures
+        const textures = {
+            player: textureLoader.load('assets/textures/player.png'),
+            enemyRed: textureLoader.load('assets/textures/enemy_red.png'),
+            enemyBlue: textureLoader.load('assets/textures/enemy_blue.png'),
+            enemyGreen: textureLoader.load('assets/textures/enemy_green.png'),
+            bomb: textureLoader.load('assets/textures/bomb.png'),
+            explosion: textureLoader.load('assets/textures/explosion.png'),
+            wall: textureLoader.load('assets/textures/wall.png'),
+            crate: textureLoader.load('assets/textures/crate.png'),
+            barrel: textureLoader.load('assets/textures/barrel.png'),
+            crystal: textureLoader.load('assets/textures/crystal.png'),
+            powerupRange: textureLoader.load('assets/textures/powerup_range.png'),
+            powerupBomb: textureLoader.load('assets/textures/powerup_bomb.png'),
+            powerupSpeed: textureLoader.load('assets/textures/powerup_speed.png'),
+            floor: textureLoader.load('assets/textures/floor.png'),
+            floorSand: textureLoader.load('assets/textures/floor_sand.png'),
+            floorIce: textureLoader.load('assets/textures/floor_ice.png')
+        };
+        
+        // Set texture properties
+        Object.values(textures).forEach(texture => {
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+        });
+
+        // Error handling function
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = message;
+            errorDiv.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+            errorDiv.style.padding = '20px';
+            errorDiv.style.borderRadius = '5px';
+            console.error(message);
+        }
+
+        // Game constants
+        const GRID_WIDTH = 15;
+        const GRID_HEIGHT = 13;
+        const CELL_SIZE = 1;
+
+        // Game state
+        let scene, camera, renderer, controls;
+        let grid;
+        let player;
+        let inputManager;
+        let gameLoop;
+        let lastTime = 0;
+        let currentLevel = 1;
+        let levelTransition = false;
+        let levelTransitionTime = 0;
+        let levelTransitionDuration = 2000; // 2 seconds
+
+        // Initialize the game
+        function init() {
+            try {
+                console.log('Initializing game...');
+                
+                // Create Three.js scene
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+                console.log('Scene created successfully');
+
+                // Create camera with better initial position
+                camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 12, 12); // Closer zoom
+                camera.lookAt(0, 0, 0);
+                console.log('Camera created successfully');
+
+                // Create renderer
+                renderer = new THREE.WebGLRenderer({ 
+                    antialias: true,
+                    alpha: true
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.body.appendChild(renderer.domElement);
+                console.log('Renderer created successfully');
+
+                // Add orbit controls
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.screenSpacePanning = false;
+                controls.minDistance = 8;  // Closer minimum zoom
+                controls.maxDistance = 20; // Reduced maximum zoom
+                controls.maxPolarAngle = Math.PI / 2.5;
+                controls.target.set(0, 0, 0);
+                console.log('Controls created successfully');
+
+                // Add lighting
+                setupLighting();
+                console.log('Lighting setup complete');
+
+                // Create grid system
+                grid = new GridSystem(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE);
+                console.log('Grid system created');
+                
+                // Create player first
+                player = new Player(grid, 1, 1);
+                grid.addEntity(player);
+                console.log('Player created');
+                
+                // Create level
+                createLevel(currentLevel);
+                console.log('Level created');
+
+                // Setup input manager
+                inputManager = new InputManager();
+                console.log('Input manager created');
+
+                // Handle window resize
+                window.addEventListener('resize', onWindowResize, false);
+
+                // Start game loop
+                gameLoop = new GameLoop();
+                gameLoop.start();
+                console.log('Game loop started');
+
+                // Force initial render
+                renderer.render(scene, camera);
+                console.log('Initial render complete');
+
+            } catch (error) {
+                console.error('Error during initialization:', error);
+                showError('Error initializing game: ' + error.message);
+            }
+        }
+
+        // Update lighting setup for better visibility
+        function setupLighting() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            console.log('Ambient light added');
+
+            // Main directional light (sun)
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.target.position.set(0, 0, 0);
+            directionalLight.castShadow = true;
+            
+            // Adjust shadow camera to cover the entire scene
+            const d = 15;
+            directionalLight.shadow.camera.left = -d;
+            directionalLight.shadow.camera.right = d;
+            directionalLight.shadow.camera.top = d;
+            directionalLight.shadow.camera.bottom = -d;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.bias = -0.001;
+            
+            scene.add(directionalLight);
+            scene.add(directionalLight.target);
+            console.log('Directional light added');
+
+            // Add fill light from the opposite side
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            fillLight.position.set(-10, 10, -10);
+            scene.add(fillLight);
+            console.log('Fill light added');
+        }
+
+        // Create the game level
+        function createLevel(level) {
+            console.log(`Creating level ${level}`);
+            
+            // Clear existing level if there is one
+            if (scene) {
+                // Remove all entities except player
+                if (grid) {
+                    const entitiesToRemove = [];
+                    for (const entity of grid.entities) {
+                        if (!(entity instanceof Player)) {
+                            entitiesToRemove.push(entity);
+                            if (entity.mesh) {
+                                scene.remove(entity.mesh);
+                            }
+                        }
+                    }
+                    
+                    for (const entity of entitiesToRemove) {
+                        grid.removeEntity(entity);
+                    }
+                    
+                    // Reset grid
+                    for (let y = 0; y < GRID_HEIGHT; y++) {
+                        for (let x = 0; x < GRID_WIDTH; x++) {
+                            grid.grid[y][x] = 0;
+                        }
+                    }
+                    
+                    // Remove all meshes that aren't the player or basic scene elements
+                    const objectsToRemove = [];
+                    scene.traverse(object => {
+                        if (object instanceof THREE.Mesh && 
+                            object !== player.mesh && 
+                            !player.mesh.children.includes(object)) {
+                            objectsToRemove.push(object);
+                        }
+                    });
+                    
+                    for (const object of objectsToRemove) {
+                        scene.remove(object);
+                        if (object.geometry) object.geometry.dispose();
+                        if (object.material) {
+                            if (Array.isArray(object.material)) {
+                                object.material.forEach(m => m.dispose());
+                            } else {
+                                object.material.dispose();
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Create floor with texture
+            const floorGeometry = new THREE.PlaneGeometry(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE);
+            
+            // Select floor texture based on level
+            let floorTexture;
+            if (level % 3 === 0) {
+                floorTexture = textures.floorSand;
+            } else if (level % 3 === 1) {
+                floorTexture = textures.floor;
+            } else {
+                floorTexture = textures.floorIce;
+            }
+            
+            // Set texture properties
+            floorTexture.wrapS = THREE.RepeatWrapping;
+            floorTexture.wrapT = THREE.RepeatWrapping;
+            floorTexture.repeat.set(GRID_WIDTH / 4, GRID_HEIGHT / 4);
+            
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                map: floorTexture,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(0, 0, 0);
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Initialize grid with empty spaces
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    grid.grid[y][x] = 0;
+                }
+            }
+
+            // Step 1: Create border walls
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (x === 0 || x === GRID_WIDTH - 1 || y === 0 || y === GRID_HEIGHT - 1) {
+                        createWall(x, y);
+                        grid.setCellType(x, y, 1);
+                    }
+                }
+            }
+
+            // Step 2: Place solid pillars in classic Bomberman pattern
+            for (let y = 2; y < GRID_HEIGHT - 1; y += 2) {
+                for (let x = 2; x < GRID_WIDTH - 1; x += 2) {
+                    createWall(x, y);
+                    grid.setCellType(x, y, 1);
+                }
+            }
+
+            // Step 3: Create a guaranteed safe starting area (3x3)
+            const safeArea = [
+                {x: 1, y: 1}, {x: 2, y: 1}, {x: 1, y: 2}
+            ];
+
+            // Step 4: Create paths using a modified maze generation algorithm
+            const paths = generateConnectedPaths();
+
+            // Step 5: Place breakable blocks while maintaining paths
+            // Increase density of breakable blocks with level
+            const blockDensity = Math.min(0.75 + (level - 1) * 0.03, 0.9);
+            
+            for (let y = 1; y < GRID_HEIGHT - 1; y++) {
+                for (let x = 1; x < GRID_WIDTH - 1; x++) {
+                    // Skip if it's a solid wall or in the safe area
+                    if (grid.grid[y][x] === 1 || safeArea.some(pos => pos.x === x && pos.y === y)) {
+                        continue;
+                    }
+
+                    // Skip if it's a critical path
+                    if (paths[y][x]) {
+                        continue;
+                    }
+
+                    // Add breakable block with increasing chance based on level
+                    if (Math.random() < blockDensity) {
+                        createBlock(x, y);
+                        grid.setCellType(x, y, 2);
+                    }
+                }
+            }
+
+            // Step 6: Add enemies in valid positions
+            // Increase number of enemies with level
+            const baseEnemies = 5;
+            const numEnemies = Math.min(baseEnemies + Math.floor((level - 1) / 2), 12);
+            
+            for (let i = 0; i < numEnemies; i++) {
+                let x, y;
+                do {
+                    x = Math.floor(Math.random() * (GRID_WIDTH - 4)) + 2;
+                    y = Math.floor(Math.random() * (GRID_HEIGHT - 4)) + 2;
+                } while (!grid.isCellWalkable(x, y) || 
+                        (x <= 3 && y <= 3) || // Keep further away from player start
+                        !hasValidPath(1, 1, x, y)); // Ensure enemy can reach player
+
+                const enemy = new Enemy(grid, x, y, level);
+                grid.addEntity(enemy);
+            }
+            
+            // Reset player position to starting point
+            if (player) {
+                player.gridX = 1;
+                player.gridY = 1;
+                const worldPos = grid.gridToWorld(1, 1);
+                player.x = worldPos.x;
+                player.z = worldPos.z;
+                player.targetX = worldPos.x;
+                player.targetZ = worldPos.z;
+                player.mesh.position.set(worldPos.x, player.y, worldPos.z);
+            }
+            
+            // Update UI to show current level
+            updateLevelDisplay();
+        }
+
+        // Helper function to generate connected paths
+        function generateConnectedPaths() {
+            const paths = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(false));
+            const visited = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(false));
+            
+            // Start from multiple points to create more varied paths
+            const startPoints = [
+                {x: 1, y: 1},  // Player start
+                {x: GRID_WIDTH - 2, y: 1},  // Top right
+                {x: 1, y: GRID_HEIGHT - 2}, // Bottom left
+                {x: GRID_WIDTH - 2, y: GRID_HEIGHT - 2} // Bottom right
+            ];
+            
+            const queue = [...startPoints];
+            
+            // Mark all start points as visited and part of the path
+            for (const point of startPoints) {
+                visited[point.y][point.x] = true;
+                paths[point.y][point.x] = true;
+            }
+
+            // Directions for path generation
+            const directions = [
+                {dx: 0, dy: -1}, // up
+                {dx: 0, dy: 1},  // down
+                {dx: -1, dy: 0}, // left
+                {dx: 1, dy: 0}   // right
+            ];
+
+            // Randomize the order of processing to create more varied paths
+            queue.sort(() => Math.random() - 0.5);
+
+            while (queue.length > 0) {
+                // Randomly select a point from the queue instead of always taking the first
+                const randomIndex = Math.floor(Math.random() * queue.length);
+                const current = queue[randomIndex];
+                queue.splice(randomIndex, 1);
+                
+                // Shuffle directions for randomness
+                const shuffledDirs = [...directions]
+                    .sort(() => Math.random() - 0.5);
+
+                for (const dir of shuffledDirs) {
+                    // Try different path lengths for more variety (1-2 cells)
+                    const pathLength = Math.random() < 0.7 ? 2 : 1;
+                    const newX = current.x + dir.dx * pathLength;
+                    const newY = current.y + dir.dy * pathLength;
+                    
+                    // Check if the new position is valid
+                    if (newX >= 1 && newX < GRID_WIDTH - 1 && 
+                        newY >= 1 && newY < GRID_HEIGHT - 1 && 
+                        !visited[newY][newX]) {
+                        
+                        // Mark the path and intermediate cells
+                        if (pathLength === 2) {
+                            // For 2-cell paths, mark the intermediate cell
+                            paths[current.y + dir.dy][current.x + dir.dx] = true;
+                        }
+                        
+                        paths[newY][newX] = true;
+                        visited[newY][newX] = true;
+                        
+                        // Add to queue with probability to create more branching
+                        if (Math.random() < 0.85) {
+                            queue.push({x: newX, y: newY});
+                        }
+                    }
+                }
+            }
+
+            // Ensure critical paths around solid walls are open
+            for (let y = 1; y < GRID_HEIGHT - 1; y++) {
+                for (let x = 1; x < GRID_WIDTH - 1; x++) {
+                    if (grid.grid[y][x] === 1) { // If it's a solid wall
+                        // Mark adjacent cells as paths with a probability
+                        if (x > 1 && Math.random() < 0.7) paths[y][x-1] = true;
+                        if (x < GRID_WIDTH-2 && Math.random() < 0.7) paths[y][x+1] = true;
+                        if (y > 1 && Math.random() < 0.7) paths[y-1][x] = true;
+                        if (y < GRID_HEIGHT-2 && Math.random() < 0.7) paths[y+1][x] = true;
+                    }
+                }
+            }
+            
+            // Ensure the player starting area is always clear
+            paths[1][1] = true;
+            paths[1][2] = true;
+            paths[2][1] = true;
+            
+            // Ensure there are no isolated areas by running a connectivity check
+            ensureConnectivity(paths);
+
+            return paths;
+        }
+
+        // Helper function to ensure all walkable areas are connected
+        function ensureConnectivity(paths) {
+            const visited = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(false));
+            const queue = [{x: 1, y: 1}]; // Start from player position
+            visited[1][1] = true;
+            
+            const directions = [
+                {dx: 0, dy: -1}, // up
+                {dx: 0, dy: 1},  // down
+                {dx: -1, dy: 0}, // left
+                {dx: 1, dy: 0}   // right
+            ];
+            
+            // First, find all reachable cells from the player position
+            while (queue.length > 0) {
+                const current = queue.shift();
+                
+                for (const dir of directions) {
+                    const newX = current.x + dir.dx;
+                    const newY = current.y + dir.dy;
+                    
+                    if (newX >= 1 && newX < GRID_WIDTH - 1 && 
+                        newY >= 1 && newY < GRID_HEIGHT - 1 && 
+                        !visited[newY][newX] && paths[newY][newX]) {
+                        
+                        visited[newY][newX] = true;
+                        queue.push({x: newX, y: newY});
+                    }
+                }
+            }
+            
+            // Then, check for any unreachable path cells and connect them
+            for (let y = 1; y < GRID_HEIGHT - 1; y++) {
+                for (let x = 1; x < GRID_WIDTH - 1; x++) {
+                    if (paths[y][x] && !visited[y][x]) {
+                        // Found an isolated path cell, connect it to the main path
+                        let connected = false;
+                        
+                        // Try to find a nearby visited cell to connect to
+                        for (let attempts = 0; attempts < 4 && !connected; attempts++) {
+                            const dir = directions[attempts];
+                            let currX = x;
+                            let currY = y;
+                            
+                            // Try to find a path to a visited cell
+                            for (let steps = 0; steps < 3 && !connected; steps++) {
+                                currX += dir.dx;
+                                currY += dir.dy;
+                                
+                                if (currX >= 1 && currX < GRID_WIDTH - 1 && 
+                                    currY >= 1 && currY < GRID_HEIGHT - 1) {
+                                    
+                                    if (visited[currY][currX]) {
+                                        // Found a visited cell, create a path to it
+                                        let pathX = x;
+                                        let pathY = y;
+                                        
+                                        while (pathX !== currX || pathY !== currY) {
+                                            paths[pathY][pathX] = true;
+                                            visited[pathY][pathX] = true;
+                                            
+                                            pathX += dir.dx;
+                                            pathY += dir.dy;
+                                        }
+                                        
+                                        connected = true;
+                                    }
+                                } else {
+                                    break; // Out of bounds
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Helper function to check if there's a valid path between two points
+        function hasValidPath(startX, startY, endX, endY) {
+            const visited = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(false));
+            const queue = [{x: startX, y: startY, path: []}];
+            visited[startY][startX] = true;
+
+            const directions = [
+                {dx: 0, dy: -1}, // up
+                {dx: 0, dy: 1},  // down
+                {dx: -1, dy: 0}, // left
+                {dx: 1, dy: 0}   // right
+            ];
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+                
+                if (current.x === endX && current.y === endY) {
+                    return true;
+                }
+
+                for (const dir of directions) {
+                    const newX = current.x + dir.dx;
+                    const newY = current.y + dir.dy;
+
+                    if (newX >= 0 && newX < GRID_WIDTH && 
+                        newY >= 0 && newY < GRID_HEIGHT && 
+                        !visited[newY][newX] && 
+                        grid.isCellWalkable(newX, newY)) {
+                        
+                        visited[newY][newX] = true;
+                        queue.push({
+                            x: newX, 
+                            y: newY, 
+                            path: [...current.path, {x: newX, y: newY}]
+                        });
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        // Create a solid wall at grid position
+        function createWall(x, y) {
+            const wallGeometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                map: textures.wall,
+                roughness: 0.7,
+                metalness: 0.2
+            });
+            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+            
+            const worldPos = grid.gridToWorld(x, y);
+            wall.position.set(worldPos.x, worldPos.y + CELL_SIZE / 2, worldPos.z);
+            
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            
+            scene.add(wall);
+            return wall;
+        }
+
+        // Create a breakable block at grid position
+        function createBlock(x, y) {
+            // Determine block type (different colors and shapes)
+            const blockType = Math.floor(Math.random() * 4); // 0-3 different block types
+            
+            // Different block geometries based on type
+            let blockGeometry;
+            let blockMaterial;
+            
+            switch(blockType) {
+                case 0: // Standard wooden crate
+                    blockGeometry = new THREE.BoxGeometry(CELL_SIZE * 0.9, CELL_SIZE * 0.9, CELL_SIZE * 0.9);
+                    blockMaterial = new THREE.MeshStandardMaterial({ 
+                        map: textures.crate,
+                        roughness: 0.8,
+                        metalness: 0.1
+                    });
+                    break;
+                case 1: // Metal barrel
+                    blockGeometry = new THREE.CylinderGeometry(CELL_SIZE * 0.4, CELL_SIZE * 0.4, CELL_SIZE * 0.9, 12);
+                    blockMaterial = new THREE.MeshStandardMaterial({ 
+                        map: textures.barrel,
+                        roughness: 0.6,
+                        metalness: 0.5
+                    });
+                    break;
+                case 2: // Stone block
+                    blockGeometry = new THREE.BoxGeometry(CELL_SIZE * 0.85, CELL_SIZE * 0.85, CELL_SIZE * 0.85);
+                    blockMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x999999,
+                        roughness: 0.9,
+                        metalness: 0.2
+                    });
+                    break;
+                case 3: // Crystal formation
+                    blockGeometry = new THREE.DodecahedronGeometry(CELL_SIZE * 0.45, 0);
+                    blockMaterial = new THREE.MeshStandardMaterial({ 
+                        map: textures.crystal,
+                        roughness: 0.3,
+                        metalness: 0.8,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    break;
+            }
+            
+            const block = new THREE.Mesh(blockGeometry, blockMaterial);
+            
+            const worldPos = grid.gridToWorld(x, y);
+            block.position.set(worldPos.x, worldPos.y + CELL_SIZE / 2, worldPos.z);
+            
+            // Add some random rotation for variety
+            if (blockType !== 0) { // Don't rotate standard crates
+                block.rotation.y = Math.random() * Math.PI * 2;
+            }
+            
+            block.castShadow = true;
+            block.receiveShadow = true;
+            
+            scene.add(block);
+            return block;
+        }
+
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Grid System class
+        class GridSystem {
+            constructor(width, height, cellSize) {
+                this.width = width;
+                this.height = height;
+                this.cellSize = cellSize;
+                
+                // Grid cell types:
+                // 0 = empty (walkable)
+                // 1 = solid wall (indestructible)
+                // 2 = breakable block
+                // 3 = bomb
+                // 4 = explosion
+                this.grid = Array(height).fill().map(() => Array(width).fill(0));
+                
+                // Entities positioned on grid (players, enemies, power-ups)
+                this.entities = [];
+            }
+            
+            // Convert grid coordinates to 3D world position
+            gridToWorld(x, y) {
+                return {
+                    x: x * this.cellSize - (this.width * this.cellSize) / 2,
+                    y: 0,
+                    z: y * this.cellSize - (this.height * this.cellSize) / 2
+                };
+            }
+            
+            // Convert 3D world position to grid coordinates
+            worldToGrid(x, z) {
+                return {
+                    x: Math.floor(x + (this.width * this.cellSize) / 2 / this.cellSize),
+                    y: Math.floor(z + (this.height * this.cellSize) / 2 / this.cellSize)
+                };
+            }
+            
+            isCellWalkable(x, y) {
+                // Check if cell is within bounds
+                if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+                    return false;
+                }
+                
+                // Check if cell is empty
+                return this.grid[y][x] === 0;
+            }
+            
+            setCellType(x, y, type) {
+                if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
+                    this.grid[y][x] = type;
+                }
+            }
+            
+            // Add entity to the grid
+            addEntity(entity) {
+                this.entities.push(entity);
+            }
+            
+            // Remove entity from the grid
+            removeEntity(entity) {
+                const index = this.entities.indexOf(entity);
+                if (index !== -1) {
+                    this.entities.splice(index, 1);
+                    
+                    // If it's a bomb, make sure to clear the cell
+                    if (entity instanceof Bomb) {
+                        if (this.grid[entity.gridY] && this.grid[entity.gridY][entity.gridX] === 3) {
+                            this.setCellType(entity.gridX, entity.gridY, 0);
+                            console.log("Grid system cleared bomb cell at", entity.gridX, entity.gridY);
+                        }
+                    }
+                }
+            }
+
+            // Update all entities
+            update(deltaTime) {
+                try {
+                    // Create a copy of the entities array to avoid modification during iteration
+                    const entities = [...this.entities];
+                    
+                    // First pass: update all entities
+                    for (const entity of entities) {
+                        if (!entity) continue;
+                        
+                        if (entity.update) {
+                            if ((entity instanceof Enemy && entity.isAlive) || 
+                                (entity instanceof Player && entity.lives > 0) ||
+                                (entity instanceof Bomb && !entity.removed) ||
+                                (entity instanceof Explosion) ||
+                                !(entity instanceof Enemy || entity instanceof Player || 
+                                  entity instanceof Bomb || entity instanceof Explosion)) {
+                                entity.update(deltaTime);
+                            }
+                        }
+                    }
+                    
+                    // Second pass: cleanup any bombs that should be removed
+                    for (let i = this.entities.length - 1; i >= 0; i--) {
+                        const entity = this.entities[i];
+                        if (entity instanceof Bomb && entity.exploded && !entity.removed) {
+                            entity.forceRemove();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error updating entities:', error);
+                }
+            }
+        }
+
+        // Input Manager class
+        class InputManager {
+            constructor() {
+                this.keys = {};
+                this.bindings = {
+                    'up': ['ArrowUp', 'KeyW'],
+                    'down': ['ArrowDown', 'KeyS'],
+                    'left': ['ArrowLeft', 'KeyA'],
+                    'right': ['ArrowRight', 'KeyD'],
+                    'bomb': ['Space', 'KeyB']
+                };
+                
+                window.addEventListener('keydown', this.handleKeyDown.bind(this));
+                window.addEventListener('keyup', this.handleKeyUp.bind(this));
+            }
+            
+            handleKeyDown(event) {
+                this.keys[event.code] = true;
+            }
+            
+            handleKeyUp(event) {
+                this.keys[event.code] = false;
+            }
+            
+            isActionPressed(action) {
+                return this.bindings[action].some(key => this.keys[key]);
+            }
+        }
+
+        // Player class
+        class Player {
+            constructor(grid, x, y) {
+                this.grid = grid;
+                
+                // Grid position
+                this.gridX = x;
+                this.gridY = y;
+                
+                // World position (for rendering and smooth movement)
+                const worldPos = grid.gridToWorld(x, y);
+                this.x = worldPos.x;
+                this.y = worldPos.y;
+                this.z = worldPos.z;
+                
+                // Movement properties
+                this.targetX = this.x;
+                this.targetZ = this.z;
+                this.moveSpeed = 0.008; // Reduced speed for smoother movement
+                this.isMoving = false;
+                
+                // Player stats
+                this.bombCount = 1;     // Starting bomb capacity
+                this.bombsPlaced = 0;   // Current bombs placed
+                this.bombRange = 2;     // Starting explosion range
+                this.speed = 1;         // Movement speed multiplier
+                this.lives = 3;         // Start with 3 lives
+                this.isInvulnerable = false;
+                this.bombs = new Set(); // Track active bombs
+                
+                // Display lives
+                this.updateLivesDisplay();
+                
+                // Store materials for blinking effect
+                this.materials = {
+                    body: new THREE.MeshStandardMaterial({ 
+                        map: textures.player,
+                        roughness: 0.7,
+                        metalness: 0.3
+                    }),
+                    head: new THREE.MeshStandardMaterial({ 
+                        color: 0xffccaa,
+                        roughness: 0.5,
+                        metalness: 0.1
+                    })
+                };
+                
+                // Create 3D model
+                this.mesh = this.createPlayerMesh();
+                scene.add(this.mesh);
+            }
+            
+            createPlayerMesh() {
+                const group = new THREE.Group();
+                
+                // Body
+                const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.6, 16);
+                const body = new THREE.Mesh(bodyGeometry, this.materials.body);
+                body.position.y = 0.3;
+                body.castShadow = true;
+                group.add(body);
+                
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+                const head = new THREE.Mesh(headGeometry, this.materials.head);
+                head.position.y = 0.7;
+                head.castShadow = true;
+                group.add(head);
+                
+                group.position.set(this.x, this.y, this.z);
+                return group;
+            }
+            
+            update(deltaTime) {
+                // Handle input if not moving
+                if (!this.isMoving) {
+                    if (inputManager.isActionPressed('up')) {
+                        this.move('up');
+                    } else if (inputManager.isActionPressed('down')) {
+                        this.move('down');
+                    } else if (inputManager.isActionPressed('left')) {
+                        this.move('left');
+                    } else if (inputManager.isActionPressed('right')) {
+                        this.move('right');
+                    }
+                    
+                    if (inputManager.isActionPressed('bomb')) {
+                        this.placeBomb();
+                    }
+                }
+                
+                // Handle movement between grid cells with smooth interpolation
+                if (this.isMoving) {
+                    const moveStep = this.moveSpeed * this.speed * deltaTime;
+                    
+                    // Calculate direction to target
+                    const dx = this.targetX - this.x;
+                    const dz = this.targetZ - this.z;
+                    
+                    // Calculate distance to target
+                    const distance = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (distance < moveStep) {
+                        // We've arrived at the target cell
+                        this.x = this.targetX;
+                        this.z = this.targetZ;
+                        this.isMoving = false;
+                    } else {
+                        // Move towards target
+                        this.x += (dx / distance) * moveStep;
+                        this.z += (dz / distance) * moveStep;
+                    }
+                    
+                    // Update 3D model position
+                    this.mesh.position.set(this.x, this.y, this.z);
+                }
+
+                // Check for collision with enemies
+                if (!this.isInvulnerable) {
+                    for (const entity of this.grid.entities) {
+                        if (entity instanceof Enemy && 
+                            entity.gridX === this.gridX && 
+                            entity.gridY === this.gridY) {
+                            this.takeDamage();
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            move(direction) {
+                if (this.isMoving) return; // Already moving
+                
+                let newX = this.gridX;
+                let newY = this.gridY;
+                
+                // Calculate new position based on direction
+                switch(direction) {
+                    case 'up':
+                        newY -= 1;
+                        break;
+                    case 'down':
+                        newY += 1;
+                        break;
+                    case 'left':
+                        newX -= 1;
+                        break;
+                    case 'right':
+                        newX += 1;
+                        break;
+                }
+                
+                // Check if the new position is walkable
+                if (this.grid.isCellWalkable(newX, newY)) {
+                    // Update grid coordinates
+                    this.gridX = newX;
+                    this.gridY = newY;
+                    
+                    // Set target for smooth movement
+                    const worldPos = this.grid.gridToWorld(newX, newY);
+                    this.targetX = worldPos.x;
+                    this.targetZ = worldPos.z;
+                    this.isMoving = true;
+                    
+                    // Rotate player model based on direction
+                    switch(direction) {
+                        case 'up':
+                            this.mesh.rotation.y = Math.PI;
+                            break;
+                        case 'down':
+                            this.mesh.rotation.y = 0;
+                            break;
+                        case 'left':
+                            this.mesh.rotation.y = Math.PI / 2;
+                            break;
+                        case 'right':
+                            this.mesh.rotation.y = -Math.PI / 2;
+                            break;
+                    }
+                }
+            }
+            
+            placeBomb() {
+                // Check if player can place more bombs
+                if (this.bombs.size >= this.bombCount) {
+                    console.log("Cannot place more bombs, current count:", this.bombs.size, "max:", this.bombCount);
+                    return;
+                }
+                
+                // Check if there's already a bomb at this position
+                if (this.grid.grid[this.gridY][this.gridX] === 3) {
+                    console.log("Bomb already exists at this position");
+                    return;
+                }
+                
+                console.log("Placing bomb, current bombs:", this.bombs.size);
+                
+                // Place bomb at current grid position
+                const bomb = new Bomb(this.grid, this.gridX, this.gridY, this.bombRange);
+                this.bombs.add(bomb);
+                
+                // Listen for bomb explosion to restore bomb count
+                bomb.onExplode = () => {
+                    if (this.bombs.has(bomb)) {
+                        this.bombs.delete(bomb);
+                        console.log("Bomb exploded and removed from tracking, bombs remaining:", this.bombs.size);
+                    }
+                };
+            }
+            
+            takeDamage() {
+                if (this.isInvulnerable) return;
+                
+                this.lives--;
+                this.updateLivesDisplay();
+                
+                if (this.lives <= 0) {
+                    this.die();
+                } else {
+                    // Invulnerability period
+                    this.isInvulnerable = true;
+                    
+                    // Make materials transparent
+                    this.materials.body.transparent = true;
+                    this.materials.head.transparent = true;
+                    
+                    // Blink effect
+                    let blinkCount = 0;
+                    const blinkInterval = setInterval(() => {
+                        blinkCount++;
+                        this.materials.body.opacity = this.materials.body.opacity === 1 ? 0.3 : 1;
+                        this.materials.head.opacity = this.materials.head.opacity === 1 ? 0.3 : 1;
+                        
+                        if (blinkCount >= 20) { // 10 full blinks
+                            clearInterval(blinkInterval);
+                            this.isInvulnerable = false;
+                            this.materials.body.transparent = false;
+                            this.materials.head.transparent = false;
+                            this.materials.body.opacity = 1;
+                            this.materials.head.opacity = 1;
+                        }
+                    }, 100);
+                }
+            }
+            
+            die() {
+                scene.remove(this.mesh);
+                this.grid.removeEntity(this);
+                showError('Game Over! You ran out of lives. Refresh to restart.');
+            }
+            
+            updateLivesDisplay() {
+                const infoDiv = document.getElementById('info');
+                infoDiv.textContent = `Level: ${currentLevel} | Lives: ${this.lives} | Bombs: ${this.bombCount} | Range: ${this.bombRange}`;
+            }
+            
+            collectPowerUp(type) {
+                switch(type) {
+                    case 'bomb':
+                        this.bombCount++;
+                        console.log('Bomb capacity increased to:', this.bombCount);
+                        break;
+                    case 'range':
+                        this.bombRange++;
+                        console.log('Bomb range increased to:', this.bombRange);
+                        break;
+                    case 'speed':
+                        this.speed += 0.2;
+                        console.log('Speed increased to:', this.speed);
+                        break;
+                }
+                
+                // Update display
+                const infoDiv = document.getElementById('info');
+                infoDiv.textContent = `Level: ${currentLevel} | Lives: ${this.lives} | Bombs: ${this.bombCount} | Range: ${this.bombRange}`;
+            }
+        }
+
+        // Bomb class
+        class Bomb {
+            constructor(grid, x, y, range) {
+                this.grid = grid;
+                this.gridX = x;
+                this.gridY = y;
+                this.range = range;
+                
+                // Set bomb in grid
+                grid.setCellType(x, y, 3); // 3 = bomb
+                
+                // World position for rendering
+                const worldPos = grid.gridToWorld(x, y);
+                this.x = worldPos.x;
+                this.y = worldPos.y;
+                this.z = worldPos.z;
+                
+                // Bomb timer
+                this.timer = 2000; // 2 seconds
+                
+                // Create 3D model
+                this.mesh = this.createBombMesh();
+                scene.add(this.mesh);
+                
+                // Bomb state
+                this.exploded = false;
+                this.removed = false;
+                
+                // Callback for explosion
+                this.onExplode = null;
+                
+                // Add to grid entities for updating
+                grid.addEntity(this);
+                
+                console.log("Bomb placed at", x, y);
+            }
+            
+            createBombMesh() {
+                // Simple bomb model (black sphere with a fuse)
+                const group = new THREE.Group();
+                
+                // Bomb body
+                const bodyGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                    map: textures.bomb,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.castShadow = true;
+                group.add(body);
+                
+                // Fuse
+                const fuseGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.2, 8);
+                const fuseMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                const fuse = new THREE.Mesh(fuseGeometry, fuseMaterial);
+                fuse.position.y = 0.3;
+                fuse.castShadow = true;
+                group.add(fuse);
+                
+                // Position the group
+                group.position.set(this.x, this.y + 0.4, this.z);
+                
+                return group;
+            }
+            
+            update(deltaTime) {
+                // If already removed, do nothing
+                if (this.removed) return;
+                
+                // If exploded but not removed, force removal
+                if (this.exploded && !this.removed) {
+                    this.forceRemove();
+                    return;
+                }
+                
+                this.timer -= deltaTime;
+                
+                // Bomb animation (pulsing effect)
+                if (this.mesh) {
+                    const pulseSpeed = 0.01;
+                    const scale = 1 + 0.2 * Math.sin(this.timer * pulseSpeed);
+                    this.mesh.scale.set(scale, scale, scale);
+                }
+                
+                if (this.timer <= 0 && !this.exploded) {
+                    this.explode();
+                }
+            }
+            
+            forceRemove() {
+                // Already removed, do nothing
+                if (this.removed) {
+                    console.log("Bomb already removed, skipping cleanup");
+                    return;
+                }
+                
+                console.log("Force removing bomb at", this.gridX, this.gridY);
+                
+                // Mark as removed to prevent multiple removals
+                this.removed = true;
+                
+                // Clear bomb from grid
+                if (this.grid.grid[this.gridY] && this.grid.grid[this.gridY][this.gridX] === 3) {
+                    this.grid.setCellType(this.gridX, this.gridY, 0);
+                    console.log("Cleared bomb from grid cell");
+                }
+                
+                // Remove bomb mesh from scene
+                if (this.mesh) {
+                    if (scene.children.includes(this.mesh)) {
+                        scene.remove(this.mesh);
+                        console.log("Removed bomb mesh from scene");
+                    }
+                    
+                    // Dispose of geometries and materials
+                    this.mesh.traverse((child) => {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(m => m.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    });
+                    
+                    // Clear mesh reference
+                    this.mesh = null;
+                }
+                
+                // Notify that bomb has been removed
+                if (this.onExplode) {
+                    this.onExplode();
+                    console.log("Called onExplode callback");
+                }
+                
+                // Remove from grid entities - do this last
+                const index = this.grid.entities.indexOf(this);
+                if (index !== -1) {
+                    this.grid.entities.splice(index, 1);
+                    console.log("Removed bomb from grid entities");
+                }
+            }
+            
+            explode() {
+                // If already exploded or removed, do nothing
+                if (this.exploded || this.removed) return;
+                
+                console.log("Bomb exploding at", this.gridX, this.gridY);
+                
+                // Mark as exploded
+                this.exploded = true;
+                
+                // Create explosion at bomb position
+                new Explosion(this.grid, this.gridX, this.gridY, this.range);
+                
+                // Immediately remove the bomb
+                this.forceRemove();
+            }
+        }
+
+        // Explosion class
+        class Explosion {
+            constructor(grid, x, y, range) {
+                this.grid = grid;
+                this.gridX = x;
+                this.gridY = y;
+                this.range = range;
+                
+                // Explosion lifetime
+                this.lifetime = 500; // 0.5 seconds
+                
+                // Explosion mesh parts
+                this.parts = [];
+                
+                // Create explosion center
+                this.createExplosionPart(x, y, 'center');
+                
+                // Propagate explosion in four directions
+                this.propagateExplosion(x, y, 1, 0, range);  // Right
+                this.propagateExplosion(x, y, -1, 0, range); // Left
+                this.propagateExplosion(x, y, 0, 1, range);  // Down
+                this.propagateExplosion(x, y, 0, -1, range); // Up
+                
+                // Add to grid entities for updating
+                grid.addEntity(this);
+                
+                console.log(`Created explosion at (${x},${y}) with range ${range}`);
+            }
+            
+            propagateExplosion(x, y, dx, dy, remainingRange) {
+                if (remainingRange <= 0) return;
+                
+                const newX = x + dx;
+                const newY = y + dy;
+                
+                // Check bounds
+                if (newX < 0 || newX >= this.grid.width || newY < 0 || newY >= this.grid.height) {
+                    return;
+                }
+                
+                const cellType = this.grid.grid[newY][newX];
+                
+                // Create explosion part at this position regardless of what's there
+                // This ensures the explosion is visible on all affected cells
+                const partType = remainingRange > 1 ? 'middle' : 'end';
+                const orientation = dx !== 0 ? 'horizontal' : 'vertical';
+                this.createExplosionPart(newX, newY, partType, orientation);
+                
+                // Check for entities at this position
+                const entitiesAtPosition = this.grid.entities.filter(entity => 
+                    entity.gridX === newX && entity.gridY === newY
+                );
+                
+                for (const entity of entitiesAtPosition) {
+                    if (entity instanceof Enemy && entity.isAlive) {
+                        entity.die();
+                    } else if (entity instanceof Player && !entity.isInvulnerable) {
+                        entity.takeDamage();
+                    } else if (entity instanceof Bomb && !entity.exploded) {
+                        // Chain reaction with other bombs
+                        entity.timer = 0;
+                    }
+                }
+                
+                // Stop propagation at solid walls
+                if (cellType === 1) { // Solid wall
+                    return;
+                } 
+                // Handle breakable blocks
+                else if (cellType === 2) { 
+                    this.grid.setCellType(newX, newY, 0);
+                    
+                    // Find and remove the block mesh from the scene
+                    const blocks = scene.children.filter(child => 
+                        child instanceof THREE.Mesh && 
+                        Math.abs(child.position.x - this.grid.gridToWorld(newX, newY).x) < 0.1 &&
+                        Math.abs(child.position.z - this.grid.gridToWorld(newX, newY).z) < 0.1 &&
+                        child.geometry instanceof THREE.BoxGeometry
+                    );
+                    
+                    blocks.forEach(block => {
+                        scene.remove(block);
+                        if (block.geometry) block.geometry.dispose();
+                        if (block.material) block.material.dispose();
+                    });
+                    
+                    // Random chance to spawn power-up
+                    if (Math.random() < 0.3) { // 30% chance
+                        this.spawnPowerUp(newX, newY);
+                    }
+                    
+                    return; // Stop propagation at breakable blocks
+                } 
+                // Continue propagation through empty space
+                else {
+                    // Continue propagation
+                    this.propagateExplosion(newX, newY, dx, dy, remainingRange - 1);
+                }
+            }
+            
+            createExplosionPart(x, y, type, orientation = 'center') {
+                // Set explosion in grid
+                this.grid.setCellType(x, y, 4); // 4 = explosion
+                
+                // World position for rendering
+                const worldPos = this.grid.gridToWorld(x, y);
+                
+                // Create explosion mesh based on type
+                let geometry;
+                
+                if (type === 'center') {
+                    // Center explosion is a square
+                    geometry = new THREE.BoxGeometry(CELL_SIZE * 0.7, CELL_SIZE * 0.3, CELL_SIZE * 0.7);
+                } else if (orientation === 'horizontal') {
+                    // Horizontal explosion parts
+                    geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE * 0.3, CELL_SIZE * 0.5);
+                } else { // vertical
+                    // Vertical explosion parts
+                    geometry = new THREE.BoxGeometry(CELL_SIZE * 0.5, CELL_SIZE * 0.3, CELL_SIZE);
+                }
+                
+                const material = new THREE.MeshStandardMaterial({
+                    map: textures.explosion,
+                    emissive: 0xff2200,
+                    emissiveIntensity: 0.5,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(worldPos.x, worldPos.y + CELL_SIZE * 0.15, worldPos.z);
+                
+                // Add to scene
+                scene.add(mesh);
+                
+                // Store mesh and position for later removal
+                this.parts.push({
+                    x: x,
+                    y: y,
+                    mesh: mesh
+                });
+                
+                // Add a small light source at explosion for dramatic effect
+                const light = new THREE.PointLight(0xff5500, 1, 3);
+                light.position.set(worldPos.x, worldPos.y + 0.5, worldPos.z);
+                scene.add(light);
+                
+                // Also store the light for removal
+                this.parts.push({
+                    x: x,
+                    y: y,
+                    mesh: light
+                });
+            }
+            
+            update(deltaTime) {
+                this.lifetime -= deltaTime;
+                
+                if (this.lifetime <= 0) {
+                    this.remove();
+                } else {
+                    // Fade out effect
+                    const opacity = this.lifetime / 500; // Fade based on remaining lifetime
+                    
+                    for (const part of this.parts) {
+                        if (part.mesh instanceof THREE.Mesh && part.mesh.material) {
+                            part.mesh.material.opacity = opacity;
+                        } else if (part.mesh instanceof THREE.PointLight) {
+                            part.mesh.intensity = opacity;
+                        }
+                    }
+                }
+            }
+            
+            remove() {
+                console.log("Removing explosion");
+                
+                // Remove all explosion parts
+                for (const part of this.parts) {
+                    // Remove explosion from grid
+                    if (this.grid.grid[part.y][part.x] === 4) {
+                        this.grid.setCellType(part.x, part.y, 0);
+                    }
+                    
+                    // Remove mesh from scene
+                    if (part.mesh && scene.children.includes(part.mesh)) {
+                        scene.remove(part.mesh);
+                        
+                        // Dispose of geometries and materials for meshes
+                        if (part.mesh instanceof THREE.Mesh) {
+                            if (part.mesh.geometry) part.mesh.geometry.dispose();
+                            if (part.mesh.material) {
+                                if (Array.isArray(part.mesh.material)) {
+                                    part.mesh.material.forEach(m => m.dispose());
+                                } else {
+                                    part.mesh.material.dispose();
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Clear parts array
+                this.parts = [];
+                
+                // Remove from grid entities
+                this.grid.removeEntity(this);
+            }
+            
+            spawnPowerUp(x, y) {
+                // Randomly choose between range, bomb, and speed power-ups
+                const rand = Math.random();
+                let type;
+                let texture;
+                
+                if (rand < 0.4) {
+                    type = 'range';
+                    texture = textures.powerupRange;
+                } else if (rand < 0.8) {
+                    type = 'bomb';
+                    texture = textures.powerupBomb;
+                } else {
+                    type = 'speed';
+                    texture = textures.powerupSpeed;
+                }
+                
+                // Create power-up mesh and add to scene
+                const powerUpGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+                const powerUpMaterial = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    emissive: type === 'range' ? 0xff0000 : (type === 'bomb' ? 0x00ff00 : 0x0000ff),
+                    emissiveIntensity: 0.3,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const powerUpMesh = new THREE.Mesh(powerUpGeometry, powerUpMaterial);
+                
+                const worldPos = this.grid.gridToWorld(x, y);
+                powerUpMesh.position.set(worldPos.x, worldPos.y + 0.2, worldPos.z);
+                
+                scene.add(powerUpMesh);
+                
+                // Add power-up to grid entities
+                const powerUp = {
+                    gridX: x,
+                    gridY: y,
+                    type: type,
+                    mesh: powerUpMesh,
+                    update: () => {
+                        // Rotate the power-up
+                        powerUpMesh.rotation.y += 0.02;
+                        
+                        // Check if player collects the power-up
+                        if (player.gridX === x && player.gridY === y) {
+                            player.collectPowerUp(type);
+                            
+                            // Remove power-up
+                            scene.remove(powerUpMesh);
+                            this.grid.removeEntity(powerUp);
+                            powerUpGeometry.dispose();
+                            powerUpMaterial.dispose();
+                        }
+                    }
+                };
+                
+                this.grid.addEntity(powerUp);
+            }
+        }
+
+        // Game Loop class
+        class GameLoop {
+            constructor() {
+                this.lastTime = 0;
+                this.accumulatedTime = 0;
+                this.timeStep = 1000/60; // 60 FPS target
+            }
+            
+            start() {
+                try {
+                    this.lastTime = performance.now();
+                    requestAnimationFrame(this.loop.bind(this));
+                    console.log('Game loop started successfully');
+                } catch (error) {
+                    console.error('Error starting game loop:', error);
+                    showError('Error starting game loop: ' + error.message);
+                }
+            }
+            
+            loop(currentTime) {
+                try {
+                    const deltaTime = currentTime - this.lastTime;
+                    this.lastTime = currentTime;
+                    
+                    this.accumulatedTime += deltaTime;
+                    
+                    while(this.accumulatedTime >= this.timeStep) {
+                        this.update(this.timeStep);
+                        this.accumulatedTime -= this.timeStep;
+                    }
+                    
+                    this.render();
+                    
+                    requestAnimationFrame(this.loop.bind(this));
+                } catch (error) {
+                    console.error('Error in game loop:', error);
+                    showError('Error in game loop: ' + error.message);
+                }
+            }
+            
+            update(deltaTime) {
+                try {
+                    // Handle level transition
+                    if (levelTransition) {
+                        levelTransitionTime += deltaTime;
+                        if (levelTransitionTime >= levelTransitionDuration) {
+                            nextLevel();
+                        }
+                        return;
+                    }
+                    
+                    grid.update(deltaTime);
+                    controls.update();
+                    
+                    // Check if level is complete
+                    checkLevelComplete();
+                } catch (error) {
+                    console.error('Error in update:', error);
+                    showError('Error in update: ' + error.message);
+                }
+            }
+            
+            render() {
+                try {
+                    renderer.render(scene, camera);
+                } catch (error) {
+                    console.error('Error in render:', error);
+                    showError('Error in render: ' + error.message);
+                }
+            }
+        }
+
+        // Update camera to follow player
+        function updateCamera() {
+            // Disable automatic camera following for now since we have orbit controls
+            // This allows better control during development
+            return;
+            
+            // Original camera following code (commented out)
+            /*
+            const targetX = player.x;
+            const targetZ = player.z + 5;
+            
+            camera.position.x = targetX;
+            camera.position.z = targetZ;
+            camera.lookAt(player.x, 0, player.z);
+            */
+        }
+
+        // Enemy class
+        class Enemy {
+            constructor(grid, x, y, level = 1) {
+                this.grid = grid;
+                this.gridX = x;
+                this.gridY = y;
+                
+                // World position
+                const worldPos = grid.gridToWorld(x, y);
+                this.x = worldPos.x;
+                this.y = worldPos.y;
+                this.z = worldPos.z;
+                
+                // Movement properties
+                this.targetX = this.x;
+                this.targetZ = this.z;
+                this.moveSpeed = 0.004 * (1 + (level - 1) * 0.1); // Increase speed with level
+                this.isMoving = false;
+                
+                // AI properties
+                this.thinkTime = 0;
+                this.directions = ['up', 'down', 'left', 'right'];
+                
+                // Enemy type (different enemies)
+                // Higher chance of smarter enemies in higher levels
+                const smartEnemyChance = Math.min(0.2 + (level - 1) * 0.1, 0.6);
+                const fastEnemyChance = Math.min(0.3 + (level - 1) * 0.05, 0.5);
+                
+                const rand = Math.random();
+                if (rand < smartEnemyChance) {
+                    this.enemyType = 2; // Smart enemy
+                } else if (rand < smartEnemyChance + fastEnemyChance) {
+                    this.enemyType = 1; // Fast enemy
+                } else {
+                    this.enemyType = 0; // Standard enemy
+                }
+                
+                // Store materials for visibility management
+                this.materials = {
+                    body: null,
+                    head: null
+                };
+                
+                // Set materials based on enemy type
+                switch(this.enemyType) {
+                    case 0: // Red enemy (standard)
+                        this.materials.body = new THREE.MeshStandardMaterial({ 
+                            map: textures.enemyRed,
+                            roughness: 0.7,
+                            metalness: 0.3
+                        });
+                        this.materials.head = new THREE.MeshStandardMaterial({ 
+                            color: 0xff4444,
+                            roughness: 0.5,
+                            metalness: 0.1
+                        });
+                        break;
+                    case 1: // Blue enemy (faster)
+                        this.materials.body = new THREE.MeshStandardMaterial({ 
+                            map: textures.enemyBlue,
+                            roughness: 0.7,
+                            metalness: 0.3
+                        });
+                        this.materials.head = new THREE.MeshStandardMaterial({ 
+                            color: 0x44aaff,
+                            roughness: 0.5,
+                            metalness: 0.1
+                        });
+                        this.moveSpeed = 0.006 * (1 + (level - 1) * 0.1); // Faster, increases with level
+                        break;
+                    case 2: // Green enemy (smarter)
+                        this.materials.body = new THREE.MeshStandardMaterial({ 
+                            map: textures.enemyGreen,
+                            roughness: 0.7,
+                            metalness: 0.3
+                        });
+                        this.materials.head = new THREE.MeshStandardMaterial({ 
+                            color: 0x66ff66,
+                            roughness: 0.5,
+                            metalness: 0.1
+                        });
+                        break;
+                }
+                
+                // Create 3D model
+                this.mesh = this.createEnemyMesh();
+                scene.add(this.mesh);
+                this.isAlive = true;
+                
+                // Death animation properties
+                this.isDying = false;
+                this.deathTime = 0;
+                this.deathDuration = 1000; // 1 second death animation
+            }
+            
+            createEnemyMesh() {
+                const group = new THREE.Group();
+                
+                // Different enemy shapes based on type
+                if (this.enemyType === 0) { // Standard enemy
+                    // Body
+                    const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.6, 16);
+                    const body = new THREE.Mesh(bodyGeometry, this.materials.body);
+                    body.position.y = 0.3;
+                    body.castShadow = true;
+                    group.add(body);
+                    
+                    // Head
+                    const headGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+                    const head = new THREE.Mesh(headGeometry, this.materials.head);
+                    head.position.y = 0.7;
+                    head.castShadow = true;
+                    group.add(head);
+                } 
+                else if (this.enemyType === 1) { // Fast blue enemy
+                    // Body
+                    const bodyGeometry = new THREE.ConeGeometry(0.3, 0.7, 16);
+                    const body = new THREE.Mesh(bodyGeometry, this.materials.body);
+                    body.position.y = 0.35;
+                    body.castShadow = true;
+                    group.add(body);
+                    
+                    // Head
+                    const headGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+                    const head = new THREE.Mesh(headGeometry, this.materials.head);
+                    head.position.y = 0.7;
+                    head.castShadow = true;
+                    group.add(head);
+                }
+                else if (this.enemyType === 2) { // Smart green enemy
+                    // Body
+                    const bodyGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+                    const body = new THREE.Mesh(bodyGeometry, this.materials.body);
+                    body.position.y = 0.25;
+                    body.castShadow = true;
+                    group.add(body);
+                    
+                    // Head
+                    const headGeometry = new THREE.IcosahedronGeometry(0.2, 0);
+                    const head = new THREE.Mesh(headGeometry, this.materials.head);
+                    head.position.y = 0.6;
+                    head.castShadow = true;
+                    group.add(head);
+                }
+                
+                group.position.set(this.x, this.y, this.z);
+                return group;
+            }
+            
+            update(deltaTime) {
+                if (this.isDying) {
+                    this.updateDeathAnimation(deltaTime);
+                    return;
+                }
+                
+                if (!this.isMoving) {
+                    this.thinkTime -= deltaTime;
+                    
+                    if (this.thinkTime <= 0) {
+                        // Choose direction based on enemy type
+                        let direction;
+                        
+                        if (this.enemyType === 2 && Math.random() < 0.6) {
+                            // Smarter enemy tries to move toward player
+                            direction = this.getDirectionTowardPlayer();
+                        } else {
+                            // Random direction
+                            direction = this.directions[Math.floor(Math.random() * this.directions.length)];
+                        }
+                        
+                        this.move(direction);
+                        this.thinkTime = 1000; // Wait 1 second before next move
+                    }
+                }
+                
+                // Handle movement
+                if (this.isMoving) {
+                    const moveStep = this.moveSpeed * deltaTime;
+                    
+                    const dx = this.targetX - this.x;
+                    const dz = this.targetZ - this.z;
+                    
+                    const distance = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (distance < moveStep) {
+                        this.x = this.targetX;
+                        this.z = this.targetZ;
+                        this.isMoving = false;
+                    } else {
+                        this.x += (dx / distance) * moveStep;
+                        this.z += (dz / distance) * moveStep;
+                    }
+                    
+                    this.mesh.position.set(this.x, this.y, this.z);
+                }
+            }
+            
+            getDirectionTowardPlayer() {
+                // Simple AI to move toward player
+                const dx = player.gridX - this.gridX;
+                const dy = player.gridY - this.gridY;
+                
+                // Decide whether to move horizontally or vertically
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    // Move horizontally
+                    return dx > 0 ? 'right' : 'left';
+                } else {
+                    // Move vertically
+                    return dy > 0 ? 'down' : 'up';
+                }
+            }
+            
+            move(direction) {
+                if (this.isMoving) return;
+                
+                let newX = this.gridX;
+                let newY = this.gridY;
+                
+                switch(direction) {
+                    case 'up':
+                        newY -= 1;
+                        break;
+                    case 'down':
+                        newY += 1;
+                        break;
+                    case 'left':
+                        newX -= 1;
+                        break;
+                    case 'right':
+                        newX += 1;
+                        break;
+                }
+                
+                if (this.grid.isCellWalkable(newX, newY)) {
+                    this.gridX = newX;
+                    this.gridY = newY;
+                    
+                    const worldPos = this.grid.gridToWorld(newX, newY);
+                    this.targetX = worldPos.x;
+                    this.targetZ = worldPos.z;
+                    this.isMoving = true;
+                    
+                    // Rotate enemy based on direction
+                    switch(direction) {
+                        case 'up':
+                            this.mesh.rotation.y = Math.PI;
+                            break;
+                        case 'down':
+                            this.mesh.rotation.y = 0;
+                            break;
+                        case 'left':
+                            this.mesh.rotation.y = Math.PI / 2;
+                            break;
+                        case 'right':
+                            this.mesh.rotation.y = -Math.PI / 2;
+                            break;
+                    }
+                }
+            }
+            
+            updateDeathAnimation(deltaTime) {
+                this.deathTime += deltaTime;
+                
+                if (this.deathTime >= this.deathDuration) {
+                    // Animation complete, remove enemy
+                    scene.remove(this.mesh);
+                    this.grid.removeEntity(this);
+                    return;
+                }
+                
+                // Animation progress (0 to 1)
+                const progress = this.deathTime / this.deathDuration;
+                
+                // Scale down
+                const scale = 1 - progress;
+                this.mesh.scale.set(scale, scale, scale);
+                
+                // Rotate and rise up
+                this.mesh.rotation.y += 0.2;
+                this.mesh.position.y += 0.01;
+                
+                // Fade out
+                this.materials.body.opacity = 1 - progress;
+                this.materials.head.opacity = 1 - progress;
+            }
+            
+            die() {
+                if (!this.isAlive || this.isDying) return;
+                
+                console.log("Enemy dying at", this.gridX, this.gridY);
+                
+                // Start death animation
+                this.isDying = true;
+                this.deathTime = 0;
+                
+                // Make materials transparent for fade-out
+                this.materials.body.transparent = true;
+                this.materials.head.transparent = true;
+                
+                // Create explosion particles
+                this.createDeathParticles();
+                
+                // Play sound (if we had sound)
+                // playSound('enemy-death');
+            }
+            
+            createDeathParticles() {
+                // Create particle effect for death
+                const particleCount = 20;
+                const particles = new THREE.Group();
+                
+                for (let i = 0; i < particleCount; i++) {
+                    // Create small particle
+                    const size = 0.1 + Math.random() * 0.1;
+                    const geometry = new THREE.SphereGeometry(size, 8, 8);
+                    
+                    // Use enemy color for particles
+                    const material = new THREE.MeshStandardMaterial({
+                        color: this.materials.body.color,
+                        emissive: this.materials.body.color,
+                        emissiveIntensity: 0.5,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    
+                    const particle = new THREE.Mesh(geometry, material);
+                    
+                    // Random position within enemy
+                    particle.position.set(
+                        (Math.random() - 0.5) * 0.5,
+                        Math.random() * 0.5,
+                        (Math.random() - 0.5) * 0.5
+                    );
+                    
+                    // Random velocity
+                    particle.userData.velocity = {
+                        x: (Math.random() - 0.5) * 0.02,
+                        y: 0.01 + Math.random() * 0.02,
+                        z: (Math.random() - 0.5) * 0.02
+                    };
+                    
+                    // Add to particle group
+                    particles.add(particle);
+                }
+                
+                // Position particle group at enemy position
+                particles.position.set(this.x, this.y, this.z);
+                scene.add(particles);
+                
+                // Add particle system to grid entities for updating
+                const particleSystem = {
+                    mesh: particles,
+                    lifetime: 1000, // 1 second
+                    update: function(deltaTime) {
+                        this.lifetime -= deltaTime;
+                        
+                        if (this.lifetime <= 0) {
+                            // Remove particles when done
+                            scene.remove(particles);
+                            grid.removeEntity(this);
+                            
+                            // Dispose of geometries and materials
+                            particles.children.forEach(particle => {
+                                if (particle.geometry) particle.geometry.dispose();
+                                if (particle.material) particle.material.dispose();
+                            });
+                            
+                            return;
+                        }
+                        
+                        // Update each particle
+                        particles.children.forEach(particle => {
+                            // Move particle based on velocity
+                            particle.position.x += particle.userData.velocity.x;
+                            particle.position.y += particle.userData.velocity.y;
+                            particle.position.z += particle.userData.velocity.z;
+                            
+                            // Apply gravity
+                            particle.userData.velocity.y -= 0.0005;
+                            
+                            // Fade out
+                            if (particle.material) {
+                                particle.material.opacity = this.lifetime / 1000;
+                            }
+                        });
+                    }
+                };
+                
+                this.grid.addEntity(particleSystem);
+            }
+        }
+
+        // Check if level is complete (all enemies defeated)
+        function checkLevelComplete() {
+            if (levelTransition) return false;
+            
+            // Count alive enemies
+            let enemyCount = 0;
+            for (const entity of grid.entities) {
+                if (entity instanceof Enemy && entity.isAlive) {
+                    enemyCount++;
+                }
+            }
+            
+            if (enemyCount === 0) {
+                console.log("Level complete! All enemies defeated.");
+                startLevelTransition();
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Start level transition animation
+        function startLevelTransition() {
+            levelTransition = true;
+            levelTransitionTime = 0;
+            
+            // Create level complete text
+            showLevelCompleteMessage();
+            
+            // Create fade overlay
+            createFadeOverlay();
+        }
+
+        // Show level complete message
+        function showLevelCompleteMessage() {
+            const message = document.createElement('div');
+            message.id = 'levelComplete';
+            message.style.position = 'absolute';
+            message.style.top = '50%';
+            message.style.left = '50%';
+            message.style.transform = 'translate(-50%, -50%)';
+            message.style.color = 'white';
+            message.style.fontSize = '36px';
+            message.style.fontWeight = 'bold';
+            message.style.textAlign = 'center';
+            message.style.textShadow = '2px 2px 4px rgba(0,0,0,0.7)';
+            message.style.zIndex = '1000';
+            message.innerHTML = `LEVEL ${currentLevel} COMPLETE!<br><span style="font-size: 24px">Get ready for level ${currentLevel + 1}...</span>`;
+            document.body.appendChild(message);
+            
+            // Add bonus message
+            const bonusType = grantLevelCompletionBonus();
+            
+            const bonusMessage = document.createElement('div');
+            bonusMessage.id = 'bonusMessage';
+            bonusMessage.style.position = 'absolute';
+            bonusMessage.style.top = '65%';
+            bonusMessage.style.left = '50%';
+            bonusMessage.style.transform = 'translate(-50%, -50%)';
+            bonusMessage.style.color = '#ffff00';
+            bonusMessage.style.fontSize = '24px';
+            bonusMessage.style.fontWeight = 'bold';
+            bonusMessage.style.textAlign = 'center';
+            bonusMessage.style.textShadow = '2px 2px 4px rgba(0,0,0,0.7)';
+            bonusMessage.style.zIndex = '1000';
+            
+            if (bonusType === 'life') {
+                bonusMessage.innerHTML = 'BONUS: +1 LIFE!';
+            } else if (bonusType === 'bomb') {
+                bonusMessage.innerHTML = 'BONUS: +1 BOMB CAPACITY!';
+            } else if (bonusType === 'range') {
+                bonusMessage.innerHTML = 'BONUS: +1 BOMB RANGE!';
+            } else if (bonusType === 'speed') {
+                bonusMessage.innerHTML = 'BONUS: SPEED BOOST!';
+            }
+            
+            document.body.appendChild(bonusMessage);
+        }
+
+        // Create fade overlay for transition
+        function createFadeOverlay() {
+            const overlay = document.createElement('div');
+            overlay.id = 'fadeOverlay';
+            overlay.style.position = 'absolute';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.backgroundColor = 'black';
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 1s ease-in-out';
+            overlay.style.zIndex = '999';
+            overlay.style.pointerEvents = 'none';
+            document.body.appendChild(overlay);
+            
+            // Trigger fade in
+            setTimeout(() => {
+                overlay.style.opacity = '1';
+            }, 100);
+        }
+
+        // Grant a bonus for completing the level
+        function grantLevelCompletionBonus() {
+            // Determine bonus type
+            let bonusType;
+            
+            // Every 3 levels, grant an extra life
+            if (currentLevel % 3 === 0) {
+                bonusType = 'life';
+                player.lives++;
+            } else {
+                // Otherwise, randomly grant a power-up
+                const rand = Math.random();
+                if (rand < 0.4) {
+                    bonusType = 'bomb';
+                    player.bombCount++;
+                } else if (rand < 0.8) {
+                    bonusType = 'range';
+                    player.bombRange++;
+                } else {
+                    bonusType = 'speed';
+                    player.speed += 0.2;
+                }
+            }
+            
+            // Update display
+            player.updateLivesDisplay();
+            
+            return bonusType;
+        }
+
+        // Advance to next level
+        function nextLevel() {
+            currentLevel++;
+            
+            // Remove level complete message
+            const message = document.getElementById('levelComplete');
+            if (message) {
+                document.body.removeChild(message);
+            }
+            
+            // Remove bonus message
+            const bonusMessage = document.getElementById('bonusMessage');
+            if (bonusMessage) {
+                document.body.removeChild(bonusMessage);
+            }
+            
+            // Create new level
+            createLevel(currentLevel);
+            
+            // Fade out the overlay
+            const overlay = document.getElementById('fadeOverlay');
+            if (overlay) {
+                overlay.style.opacity = '0';
+                
+                // Remove overlay after fade out
+                setTimeout(() => {
+                    if (overlay.parentNode) {
+                        document.body.removeChild(overlay);
+                    }
+                }, 1000);
+            }
+            
+            // Reset transition state
+            levelTransition = false;
+        }
+
+        // Update level display in UI
+        function updateLevelDisplay() {
+            const infoDiv = document.getElementById('info');
+            // Check if player exists before accessing its properties
+            if (player) {
+                infoDiv.textContent = `Level: ${currentLevel} | Lives: ${player.lives} | Bombs: ${player.bombCount} | Range: ${player.bombRange}`;
+            } else {
+                infoDiv.textContent = `Level: ${currentLevel}`;
+            }
+        }
+
+        // Initialize the game when the page loads
+        window.onload = init;
+    </script>
+</body>
+</html> 
