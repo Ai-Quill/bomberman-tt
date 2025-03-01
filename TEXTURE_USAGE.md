@@ -1,6 +1,6 @@
 # Using Generated Textures in Your Game
 
-This document explains how to use the generated textures in your Bomberman game.
+This document explains how to use the generated textures in your game.
 
 ## Overview
 
@@ -29,12 +29,21 @@ The script maps the generated textures to the game's expected textures as follow
 | Generated Texture | Game Textures |
 |-------------------|---------------|
 | player_0.png | player.png |
-| enemy_0.png | enemy_red.png, enemy_blue.png, enemy_green.png |
+| enemy_red_0.png | enemy_red.png |
+| enemy_blue_0.png | enemy_blue.png |
+| enemy_green_0.png | enemy_green.png |
 | bomb_0.png | bomb.png |
 | explosion_0.png | explosion.png |
 | wall_0.png | wall.png |
-| breakable_0.png | crate.png, barrel.png |
-| powerup_0.png | powerup_bomb.png, powerup_range.png, powerup_speed.png, crystal.png |
+| breakable_0.png | crate.png |
+| barrel_0.png | barrel.png |
+| floor_0.png | floor.png |
+| floor_ice_0.png | floor_ice.png |
+| floor_sand_0.png | floor_sand.png |
+| power-up_bomb_0.png | power-up_bomb.png |
+| power-up_range_0.png | power-up_range.png |
+| power-up_speed_0.png | power-up_speed.png |
+| crystal_0.png | crystal.png |
 
 ## Reverting to Original Textures
 
@@ -46,18 +55,39 @@ cp assets/textures/original_backup/*.png assets/textures/
 
 This will restore all the original textures from the backup.
 
+## Generating a Complete Set of Textures
+
+To generate a complete set of textures for your game, use the `generate_all_textures.sh` script:
+
+```bash
+./generate_all_textures.sh [api_key]
+```
+
+This will generate all the texture types needed for the game, including:
+- Player character
+- Different colored enemies
+- Bombs and explosions
+- Walls and breakable objects
+- Floor types (regular, ice, sand)
+- Power-up items
+
+After generating the textures, run the copy script to apply them to your game:
+
+```bash
+./copy_textures.sh
+```
+
 ## Customizing Textures
 
-If you want to use different generated textures for different game elements (e.g., different enemy types), you can:
+If you want to generate a specific texture type with a custom prompt, you can use:
 
-1. Generate multiple textures of the same type (e.g., run `./generate_textures.sh enemy` multiple times)
-2. Manually copy and rename the generated files to match the expected names
+```bash
+./generate_textures.sh [texture_type] [api_key] "Your custom prompt here"
+```
 
 For example:
 ```bash
-cp assets/textures/generated/enemy_0.png assets/textures/enemy_red.png
-cp assets/textures/generated/enemy_1.png assets/textures/enemy_blue.png
-cp assets/textures/generated/enemy_2.png assets/textures/enemy_green.png
+./generate_textures.sh player r8_your_api_key "A blue robot character with glowing eyes, pixel art style"
 ```
 
 ## Troubleshooting

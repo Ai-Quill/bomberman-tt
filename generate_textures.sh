@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Script to generate game textures using Replicate API with Python
-# Usage: ./generate_textures.sh [texture_type] [api_key]
-# Example: ./generate_textures.sh player r8_your_api_key
+# Usage: ./generate_textures.sh [texture_type] [api_key] [custom_prompt]
+# Example: ./generate_textures.sh player r8_your_api_key "A custom prompt"
 
 # Check if API key is provided
 if [ -z "$2" ]; then
     echo "Error: API key is required."
-    echo "Usage: ./generate_textures.sh [texture_type] [api_key]"
+    echo "Usage: ./generate_textures.sh [texture_type] [api_key] [custom_prompt]"
     echo "Example: ./generate_textures.sh player r8_your_api_key"
     exit 1
 fi
@@ -46,45 +46,84 @@ mkdir -p temp_images
 # Get texture type from command line argument
 TEXTURE_TYPE=${1:-"default"}
 
-# Function to generate a detailed prompt based on texture type
-generate_prompt() {
-    local type=$1
-    local prompt=""
-    
-    case $type in
-        "player")
-            prompt="A cute cartoon bomberman character with a round body, wearing a blue and white outfit with a helmet, standing in a heroic pose. Pixel art style, vibrant colors, facing forward, on a transparent background."
-            ;;
-        "enemy")
-            prompt="A menacing cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant colors, facing forward, on a transparent background."
-            ;;
-        "bomb")
-            prompt="A classic round black bomb with a lit fuse on top, cartoon style. Pixel art style, vibrant colors, on a transparent background."
-            ;;
-        "explosion")
-            prompt="A stylized cartoon explosion with bright orange and yellow flames radiating outward in a star pattern. Pixel art style, vibrant colors, on a transparent background."
-            ;;
-        "wall")
-            prompt="A solid brick wall texture for a bomberman game, with detailed cracks and shading. Pixel art style, seamless pattern, on a transparent background."
-            ;;
-        "breakable")
-            prompt="A wooden crate texture that looks breakable, with visible planks and nails. Pixel art style, seamless pattern, on a transparent background."
-            ;;
-        "powerup")
-            prompt="A glowing power-up item for a bomberman game, spherical with a special symbol inside. Pixel art style, vibrant colors, on a transparent background."
-            ;;
-        *)
-            prompt="A game asset for a bomberman-style game with vibrant colors and cartoon style. Pixel art style, on a transparent background."
-            ;;
-    esac
-    
-    echo "$prompt"
-}
+# Check if a custom prompt is provided
+if [ -n "$3" ]; then
+    PROMPT="$3"
+    echo "Using custom prompt: $PROMPT"
+else
+    # Function to generate a detailed prompt based on texture type
+    generate_prompt() {
+        local type=$1
+        local prompt=""
+        
+        case $type in
+            "player")
+                prompt="A cute cartoon bomberman character with a round body, wearing a blue and white outfit with a helmet, standing in a heroic pose. Pixel art style, vibrant colors, facing forward, on a transparent background."
+                ;;
+            "enemy")
+                prompt="A menacing cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant colors, facing forward, on a transparent background."
+                ;;
+            "bomb")
+                prompt="A classic round black bomb with a lit fuse on top, cartoon style. Pixel art style, vibrant colors, on a transparent background."
+                ;;
+            "explosion")
+                prompt="A stylized cartoon explosion with bright orange and yellow flames radiating outward in a star pattern. Pixel art style, vibrant colors, on a transparent background."
+                ;;
+            "wall")
+                prompt="A solid brick wall texture for a bomberman game, with detailed cracks and shading. Pixel art style, seamless pattern, on a transparent background."
+                ;;
+            "breakable")
+                prompt="A wooden crate texture that looks breakable, with visible planks and nails. Pixel art style, seamless pattern, on a transparent background."
+                ;;
+            "powerup")
+                prompt="A glowing power-up item for a bomberman game, spherical with a special symbol inside. Pixel art style, vibrant colors, on a transparent background."
+                ;;
+            "floor")
+                prompt="A seamless floor texture for a bomberman game, with subtle patterns. Pixel art style, top-down view, on a transparent background."
+                ;;
+            "floor_ice")
+                prompt="A seamless ice floor texture for a bomberman game, with light blue color and subtle cracks. Pixel art style, top-down view, on a transparent background."
+                ;;
+            "floor_sand")
+                prompt="A seamless sand floor texture for a bomberman game, with light tan color and subtle grain patterns. Pixel art style, top-down view, on a transparent background."
+                ;;
+            "enemy_red")
+                prompt="A menacing red cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant red color scheme, facing forward, on a transparent background."
+                ;;
+            "enemy_blue")
+                prompt="A menacing blue cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant blue color scheme, facing forward, on a transparent background."
+                ;;
+            "enemy_green")
+                prompt="A menacing green cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant green color scheme, facing forward, on a transparent background."
+                ;;
+            "powerup_bomb")
+                prompt="A bomb power-up item for a bomberman game, showing a small bomb icon inside a glowing orb. Pixel art style, vibrant colors, on a transparent background."
+                ;;
+            "powerup_range")
+                prompt="A range power-up item for a bomberman game, showing expanding arrows inside a glowing orb. Pixel art style, vibrant colors, on a transparent background."
+                ;;
+            "powerup_speed")
+                prompt="A speed power-up item for a bomberman game, showing a lightning bolt inside a glowing orb. Pixel art style, vibrant colors, on a transparent background."
+                ;;
+            "crystal")
+                prompt="A shiny crystal gem for a bomberman game, with faceted surfaces and internal glow. Pixel art style, vibrant colors, on a transparent background."
+                ;;
+            "barrel")
+                prompt="A wooden barrel texture for a bomberman game, round with metal bands. Pixel art style, top-down view, on a transparent background."
+                ;;
+            *)
+                prompt="A game asset for a bomberman-style game with vibrant colors and cartoon style. Pixel art style, on a transparent background."
+                ;;
+        esac
+        
+        echo "$prompt"
+    }
 
-# Generate the prompt
-PROMPT=$(generate_prompt "$TEXTURE_TYPE")
-echo "Generating texture for: $TEXTURE_TYPE"
-echo "Using prompt: $PROMPT"
+    # Generate the prompt
+    PROMPT=$(generate_prompt "$TEXTURE_TYPE")
+    echo "Generating texture for: $TEXTURE_TYPE"
+    echo "Using prompt: $PROMPT"
+fi
 
 # Create a temporary Python script to call the Replicate API
 cat > temp_generate.py << EOF
