@@ -129,66 +129,70 @@ class Player {
             
             switch (this.characterType) {
                 case 'alt':
-                    primaryColor = 0xff5533;    // Orange-red suit
-                    secondaryColor = 0xdddddd;  // White details
-                    accentColor = 0xffcc44;     // Gold accents
+                    primaryColor = 0xff6644;    // Brighter orange-red suit (was 0xff5533)
+                    secondaryColor = 0xffffff;  // Pure white details (was 0xdddddd)
+                    accentColor = 0xffdd55;     // Brighter gold accents (was 0xffcc44)
                     helmetColor = 0xffffff;     // White helmet
-                    visorColor = 0x3399ff;      // Blue visor
+                    visorColor = 0x44aaff;      // Brighter blue visor (was 0x3399ff)
                     break;
                 case 'girl':
-                    primaryColor = 0xff66aa;    // Pink suit
+                    primaryColor = 0xff77bb;    // Brighter pink suit (was 0xff66aa)
                     secondaryColor = 0xffffff;  // White details
-                    accentColor = 0xffdd44;     // Gold accents
+                    accentColor = 0xffee55;     // Brighter gold accents (was 0xffdd44)
                     helmetColor = 0xffffff;     // White helmet
-                    visorColor = 0x99ccff;      // Light blue visor
+                    visorColor = 0xaaddff;      // Brighter light blue visor (was 0x99ccff)
                     break;
                 default:
-                    primaryColor = 0x3366cc;    // Blue suit (like in the image)
+                    primaryColor = 0x4477ff;    // Brighter blue suit (was 0x3366cc)
                     secondaryColor = 0xffffff;  // White details
-                    accentColor = 0xff9933;     // Orange accents
+                    accentColor = 0xffaa44;     // Brighter orange accents (was 0xff9933)
                     helmetColor = 0xffffff;     // White helmet
-                    visorColor = 0x66ccff;      // Light blue visor
+                    visorColor = 0x77ddff;      // Brighter light blue visor (was 0x66ccff)
                     break;
             }
             
             // Create materials
             const suitMaterial = new THREE.MeshStandardMaterial({
                 color: primaryColor,
-                roughness: 0.6,
-                metalness: 0.2
+                roughness: 0.5, // Reduced roughness for more shine (was 0.6)
+                metalness: 0.3, // Increased metalness for more shine (was 0.2)
+                emissive: primaryColor, // Add slight emissive glow
+                emissiveIntensity: 0.2 // Subtle glow
             });
             
             const helmetMaterial = new THREE.MeshStandardMaterial({
                 color: helmetColor,
-                roughness: 0.4,
-                metalness: 0.3
+                roughness: 0.3, // Reduced roughness (was 0.4)
+                metalness: 0.4  // Increased metalness (was 0.3)
             });
             
             const visorMaterial = new THREE.MeshStandardMaterial({
                 color: visorColor,
-                roughness: 0.2,
-                metalness: 0.8,
+                roughness: 0.1, // Reduced roughness (was 0.2)
+                metalness: 0.9, // Increased metalness (was 0.8)
                 transparent: true,
-                opacity: 0.9
+                opacity: 0.9,
+                emissive: visorColor, // Add emissive glow
+                emissiveIntensity: 0.3 // Medium glow
             });
             
             const detailMaterial = new THREE.MeshStandardMaterial({
                 color: secondaryColor,
-                roughness: 0.5,
-                metalness: 0.3
+                roughness: 0.4, // Reduced roughness (was 0.5)
+                metalness: 0.4  // Increased metalness (was 0.3)
             });
             
             const accentMaterial = new THREE.MeshStandardMaterial({
                 color: accentColor,
-                roughness: 0.3,
-                metalness: 0.8,
+                roughness: 0.2, // Reduced roughness (was 0.3)
+                metalness: 0.9, // Increased metalness (was 0.8)
                 emissive: accentColor,
-                emissiveIntensity: 0.2
+                emissiveIntensity: 0.4 // Increased glow (was 0.2)
             });
             
             const skinMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffccaa,
-                roughness: 0.8,
+                color: 0xffddbb, // Brighter skin tone (was 0xffccaa)
+                roughness: 0.7, // Reduced roughness (was 0.8)
                 metalness: 0.1
             });
             
@@ -780,25 +784,25 @@ class Player {
         
         switch (this.characterType) {
             case 'alt':
-                primaryColor = 0xff5533;    // Orange-red suit
-                secondaryColor = 0xdddddd;  // White details
-                accentColor = 0xffcc44;     // Gold accents
+                primaryColor = 0xff6644;    // Brighter orange-red suit (was 0xff5533)
+                secondaryColor = 0xffffff;  // Pure white details (was 0xdddddd)
+                accentColor = 0xffdd55;     // Brighter gold accents (was 0xffcc44)
                 helmetColor = 0xffffff;     // White helmet
-                visorColor = 0x3399ff;      // Blue visor
+                visorColor = 0x44aaff;      // Brighter blue visor (was 0x3399ff)
                 break;
             case 'girl':
-                primaryColor = 0xff66aa;    // Pink suit
+                primaryColor = 0xff77bb;    // Brighter pink suit (was 0xff66aa)
                 secondaryColor = 0xffffff;  // White details
-                accentColor = 0xffdd44;     // Gold accents
+                accentColor = 0xffee55;     // Brighter gold accents (was 0xffdd44)
                 helmetColor = 0xffffff;     // White helmet
-                visorColor = 0x99ccff;      // Light blue visor
+                visorColor = 0xaaddff;      // Brighter light blue visor (was 0x99ccff)
                 break;
             default:
-                primaryColor = 0x3366cc;    // Blue suit
+                primaryColor = 0x4477ff;    // Brighter blue suit (was 0x3366cc)
                 secondaryColor = 0xffffff;  // White details
-                accentColor = 0xff9933;     // Orange accents
+                accentColor = 0xffaa44;     // Brighter orange accents (was 0xff9933)
                 helmetColor = 0xffffff;     // White helmet
-                visorColor = 0x66ccff;      // Light blue visor
+                visorColor = 0x77ddff;      // Brighter light blue visor (was 0x66ccff)
                 break;
         }
         
@@ -806,36 +810,40 @@ class Player {
         this.materials = {
             suit: new THREE.MeshStandardMaterial({
                 color: primaryColor,
-                roughness: 0.6,
-                metalness: 0.2
+                roughness: 0.5, // Reduced roughness for more shine (was 0.6)
+                metalness: 0.3, // Increased metalness for more shine (was 0.2)
+                emissive: primaryColor, // Add slight emissive glow
+                emissiveIntensity: 0.2 // Subtle glow
             }),
             helmet: new THREE.MeshStandardMaterial({
                 color: helmetColor,
-                roughness: 0.4,
-                metalness: 0.3
+                roughness: 0.3, // Reduced roughness (was 0.4)
+                metalness: 0.4  // Increased metalness (was 0.3)
             }),
             visor: new THREE.MeshStandardMaterial({
                 color: visorColor,
-                roughness: 0.2,
-                metalness: 0.8,
+                roughness: 0.1, // Reduced roughness (was 0.2)
+                metalness: 0.9, // Increased metalness (was 0.8)
                 transparent: true,
-                opacity: 0.9
+                opacity: 0.9,
+                emissive: visorColor, // Add emissive glow
+                emissiveIntensity: 0.3 // Medium glow
             }),
             detail: new THREE.MeshStandardMaterial({
                 color: secondaryColor,
-                roughness: 0.5,
-                metalness: 0.3
+                roughness: 0.4, // Reduced roughness (was 0.5)
+                metalness: 0.4  // Increased metalness (was 0.3)
             }),
             accent: new THREE.MeshStandardMaterial({
                 color: accentColor,
-                roughness: 0.3,
-                metalness: 0.8,
+                roughness: 0.2, // Reduced roughness (was 0.3)
+                metalness: 0.9, // Increased metalness (was 0.8)
                 emissive: accentColor,
-                emissiveIntensity: 0.2
+                emissiveIntensity: 0.4 // Increased glow (was 0.2)
             }),
             skin: new THREE.MeshStandardMaterial({
-                color: 0xffccaa,
-                roughness: 0.8,
+                color: 0xffddbb, // Brighter skin tone (was 0xffccaa)
+                roughness: 0.7, // Reduced roughness (was 0.8)
                 metalness: 0.1
             })
         };

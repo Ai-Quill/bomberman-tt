@@ -717,7 +717,7 @@ function parseLevelLayout(grid, levelData) {
                 switch (cell) {
                     case '#': // Wall
                         grid.setCellType(x, y, 1);
-                        const wallGeometry = new THREE.BoxGeometry(grid.cellSize, grid.cellSize, grid.cellSize);
+                        const wallGeometry = new THREE.BoxGeometry(grid.cellSize, grid.cellSize * 0.9, grid.cellSize);
                         
                         // Use different wall textures based on position (outer vs inner)
                         let wallTexture;
@@ -733,13 +733,13 @@ function parseLevelLayout(grid, levelData) {
                             wallTexture = window.textures.wallStone;
                             wallRoughness = 0.9;
                             wallMetalness = 0.2;
-                            wallColor = 0xb0a0aa; // Even lighter stone color (was 0x8a7a85)
+                            wallColor = 0xc0b0ba; // Even lighter stone color (was 0xb0a0aa)
                         } else {
                             // Inner walls use brick texture
                             wallTexture = window.textures.wall;
                             wallRoughness = 0.8;
                             wallMetalness = 0.1;
-                            wallColor = 0xb82a3a; // Lighter brick color (was 0x7a0216)
+                            wallColor = 0xd84a5a; // Lighter brick color (was 0xb82a3a)
                         }
                         
                         // If we're in a mixed theme, still consider the floor type for special cases
@@ -784,7 +784,7 @@ function parseLevelLayout(grid, levelData) {
                         }
                         
                         const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-                        wall.position.set(worldPos.x, worldPos.y + grid.cellSize * 0.5, worldPos.z);
+                        wall.position.set(worldPos.x, worldPos.y + grid.cellSize * 0.45, worldPos.z);
                         wall.castShadow = true;
                         wall.receiveShadow = true;
                         window.scene.add(wall);
@@ -792,10 +792,10 @@ function parseLevelLayout(grid, levelData) {
                         
                     case '*': // Breakable block
                         grid.setCellType(x, y, 2);
-                        // Reduce height by 30% to make blocks shorter and easier to see over
+                        // Reduce height by 50% to make blocks shorter and easier to see over
                         const blockGeometry = new THREE.BoxGeometry(
                             grid.cellSize * 0.9, 
-                            grid.cellSize * 0.6, // Reduced height (was 0.9)
+                            grid.cellSize * 0.5, // Reduced height (was 0.6)
                             grid.cellSize * 0.9
                         );
                         
@@ -893,7 +893,7 @@ function parseLevelLayout(grid, levelData) {
                         
                         const block = new THREE.Mesh(blockGeometry, materials);
                         // Position the block with the lower height taken into account
-                        block.position.set(worldPos.x, worldPos.y + grid.cellSize * 0.3, worldPos.z);
+                        block.position.set(worldPos.x, worldPos.y + grid.cellSize * 0.25, worldPos.z);
                         block.castShadow = true;
                         block.receiveShadow = true;
                         block.add(edges); // Add edges to the block
@@ -952,11 +952,18 @@ function generateRandomBreakableBlocks(levelData) {
     const levelMultiplier = 1 + (levelNumber * 0.04); // 4% more blocks per level (was 5%)
     const targetBlockCount = Math.floor(baseBlockCount * levelMultiplier);
     
-    // Keep track of placed blocks
-    let placedBlocks = 0;
+    // Calculate how many unbreakable blocks to add (fewer than breakable blocks)
+    // We'll add about 5-8% of the grid size as unbreakable blocks, depending on level
+    const baseUnbreakableCount = Math.floor((width * height) * 0.05); // 5% of cells as base
+    const unbreakableMultiplier = 1 + (levelNumber * 0.02); // 2% more blocks per level
+    const targetUnbreakableCount = Math.floor(baseUnbreakableCount * unbreakableMultiplier);
     
-    // Function to check if a position is valid for a breakable block
-    function isValidPosition(x, y) {
+    // Keep track of placed blocks
+    let placedBreakableBlocks = 0;
+    let placedUnbreakableBlocks = 0;
+    
+    // Function to check if a position is valid for a block (breakable or unbreakable)
+    function isValidPosition(x, y, isUnbreakable = false) {
         // Must be within bounds
         if (x < 0 || x >= width || y < 0 || y >= height) return false;
         
@@ -978,13 +985,53 @@ function generateRandomBreakableBlocks(levelData) {
         }
         
         if (playerStartX !== -1 && playerStartY !== -1) {
-            if (Math.abs(x - playerStartX) + Math.abs(y - playerStartY) < 3) return false;
+            // For unbreakable blocks, keep a larger distance from player start
+            const minDistance = isUnbreakable ? 4 : 3;
+            if (Math.abs(x - playerStartX) + Math.abs(y - playerStartY) < minDistance) return false;
+        }
+        
+        // For unbreakable blocks, we need additional checks
+        if (isUnbreakable) {
+            // Don't place unbreakable blocks adjacent to other unbreakable blocks
+            // to avoid creating large clusters that might look odd
+            const directions = [
+                { dx: 0, dy: -1 }, // up
+                { dx: 0, dy: 1 },  // down
+                { dx: -1, dy: 0 }, // left
+                { dx: 1, dy: 0 }   // right
+            ];
+            
+            for (const { dx, dy } of directions) {
+                const nx = x + dx;
+                const ny = y + dy;
+                
+                // Check if in bounds
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                
+                // Check if there's an unbreakable block nearby
+                if (tempLayout[ny][nx] === '#' && !isEdgePosition(nx, ny)) {
+                    return false;
+                }
+            }
+            
+            // Don't place unbreakable blocks in positions that would create a "wall"
+            // that blocks off sections of the map
+            const adjacentWalls = directions.filter(({ dx, dy }) => {
+                const nx = x + dx;
+                const ny = y + dy;
+                return nx >= 0 && nx < width && ny >= 0 && ny < height && 
+                       (tempLayout[ny][nx] === '#' || tempLayout[ny][nx] === 'B');
+            }).length;
+            
+            // If there are already 2 or more adjacent walls, don't add another one
+            // to avoid creating enclosed areas
+            if (adjacentWalls >= 2) return false;
         }
         
         // Check if placing a block here would create an isolated area
         // Temporarily place the block
         const rowChars = tempLayout[y].split('');
-        rowChars[x] = '*';
+        rowChars[x] = isUnbreakable ? 'B' : '*'; // Use 'B' temporarily for unbreakable blocks
         tempLayout[y] = rowChars.join('');
         
         // Check if the grid is still navigable
@@ -995,6 +1042,11 @@ function generateRandomBreakableBlocks(levelData) {
         tempLayout[y] = rowChars.join('');
         
         return isNavigable;
+    }
+    
+    // Helper function to check if a position is on the edge of the map
+    function isEdgePosition(x, y) {
+        return x === 0 || y === 0 || x === width - 1 || y === height - 1;
     }
     
     // Function to check if the grid is navigable (no isolated areas)
@@ -1051,19 +1103,42 @@ function generateRandomBreakableBlocks(levelData) {
     let attempts = 0;
     const maxAttempts = width * height * 2; // Limit attempts to avoid infinite loops
     
-    while (placedBlocks < targetBlockCount && attempts < maxAttempts) {
+    while (placedBreakableBlocks < targetBlockCount && attempts < maxAttempts) {
         attempts++;
         
         // Choose a random position
         const x = Math.floor(Math.random() * width);
         const y = Math.floor(Math.random() * height);
         
-        if (isValidPosition(x, y)) {
+        if (isValidPosition(x, y, false)) {
             // Place a breakable block
             const rowChars = tempLayout[y].split('');
             rowChars[x] = '*';
             tempLayout[y] = rowChars.join('');
-            placedBlocks++;
+            placedBreakableBlocks++;
+        }
+    }
+    
+    // Reset attempts for unbreakable blocks
+    attempts = 0;
+    
+    // Try to place unbreakable blocks randomly
+    while (placedUnbreakableBlocks < targetUnbreakableCount && attempts < maxAttempts) {
+        attempts++;
+        
+        // Choose a random position
+        const x = Math.floor(Math.random() * width);
+        const y = Math.floor(Math.random() * height);
+        
+        // Skip edge positions as they're already walls
+        if (isEdgePosition(x, y)) continue;
+        
+        if (isValidPosition(x, y, true)) {
+            // Place an unbreakable block
+            const rowChars = tempLayout[y].split('');
+            rowChars[x] = '#'; // Use '#' for unbreakable blocks
+            tempLayout[y] = rowChars.join('');
+            placedUnbreakableBlocks++;
         }
     }
     

@@ -66,48 +66,76 @@ class Enemy {
             let primaryColor, secondaryColor, accentColor, eyeColor;
             
             switch (this.level) {
-                case 1: // Red enemy
-                    primaryColor = 0xff0000;
-                    secondaryColor = 0xaa0000;
-                    accentColor = 0xff6600;
-                    eyeColor = 0xffff00;
+                case 1:
+                    primaryColor = 0xff5544;    // Brighter red (was 0xff3333)
+                    secondaryColor = 0xff9977;  // Brighter light red (was 0xff8866)
+                    accentColor = 0xffdd44;     // Brighter gold (was 0xffcc33)
+                    eyeColor = 0xffff00;        // Bright yellow eyes (was 0xffee00)
                     break;
-                case 2: // Blue enemy
-                    primaryColor = 0x0066ff;
-                    secondaryColor = 0x0044aa;
-                    accentColor = 0x00ffff;
-                    eyeColor = 0xaaffff;
+                case 2:
+                    primaryColor = 0x5599ff;    // Brighter blue (was 0x3377ff)
+                    secondaryColor = 0x99ccff;  // Brighter light blue (was 0x77aaff)
+                    accentColor = 0x44ffdd;     // Brighter cyan (was 0x33ffcc)
+                    eyeColor = 0x00ffff;        // Bright cyan eyes (was 0x00eeee)
                     break;
-                default: // Green enemy
-                    primaryColor = 0x00cc00;
-                    secondaryColor = 0x008800;
-                    accentColor = 0x66ff66;
-                    eyeColor = 0xccffcc;
+                default: // Level 3
+                    primaryColor = 0x55dd55;    // Brighter green (was 0x33cc33)
+                    secondaryColor = 0x99ff99;  // Brighter light green (was 0x77ee77)
+                    accentColor = 0xffff44;     // Brighter yellow (was 0xffff33)
+                    eyeColor = 0xffff00;        // Bright yellow eyes (was 0xffee00)
                     break;
             }
             
             // Create materials
-            const bodyMaterial = new THREE.MeshStandardMaterial({ 
+            const bodyMaterial = new THREE.MeshStandardMaterial({
                 color: primaryColor,
-                roughness: 0.7,
-                metalness: 0.3,
-                side: THREE.FrontSide
+                roughness: 0.5,  // Reduced roughness (was 0.6)
+                metalness: 0.3,  // Increased metalness (was 0.2)
+                emissive: primaryColor,  // Add emissive glow
+                emissiveIntensity: 0.2   // Subtle glow
             });
             
-            const secondaryMaterial = new THREE.MeshStandardMaterial({ 
+            const secondaryMaterial = new THREE.MeshStandardMaterial({
                 color: secondaryColor,
-                roughness: 0.6,
-                metalness: 0.4,
-                side: THREE.FrontSide
+                roughness: 0.4,  // Reduced roughness (was 0.5)
+                metalness: 0.3   // Increased metalness (was 0.2)
             });
             
-            const accentMaterial = new THREE.MeshStandardMaterial({ 
+            const accentMaterial = new THREE.MeshStandardMaterial({
                 color: accentColor,
+                roughness: 0.2,  // Reduced roughness (was 0.3)
+                metalness: 0.8,  // Increased metalness (was 0.7)
                 emissive: accentColor,
-                emissiveIntensity: 0.3,
-                roughness: 0.4,
-                metalness: 0.6,
-                side: THREE.FrontSide
+                emissiveIntensity: 0.3  // Added glow (was 0.0)
+            });
+            
+            const eyeMaterial = new THREE.MeshStandardMaterial({
+                color: eyeColor,
+                roughness: 0.1,  // Reduced roughness (was 0.2)
+                metalness: 0.9,  // Increased metalness (was 0.8)
+                emissive: eyeColor,
+                emissiveIntensity: 0.5  // Increased glow (was 0.3)
+            });
+            
+            // Define missing materials
+            const pupilMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x000000,
+                roughness: 0.1,
+                metalness: 0.1,
+                emissive: 0x000000,
+                emissiveIntensity: 0.2
+            });
+            
+            const eyebrowMaterial = new THREE.MeshStandardMaterial({
+                color: 0x000000,
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            
+            const mouthMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.3,
+                metalness: 0.1
             });
             
             // Create enemy body (sphere)
@@ -117,16 +145,115 @@ class Enemy {
             body.castShadow = true;
             body.receiveShadow = true;
             
+            // Add a hat or crown based on enemy level
+            if (this.level >= 2) {
+                let hatGeometry;
+                let hatMaterial;
+                
+                if (this.level === 2) {
+                    // Level 2 gets a wizard hat
+                    hatGeometry = new THREE.ConeGeometry(0.25, 0.4, 8);
+                    hatMaterial = new THREE.MeshStandardMaterial({
+                        color: accentColor,
+                        roughness: 0.3,
+                        metalness: 0.7,
+                        emissive: accentColor,
+                        emissiveIntensity: 0.3
+                    });
+                } else {
+                    // Level 3 gets a crown
+                    hatGeometry = new THREE.CylinderGeometry(0.25, 0.3, 0.15, 8);
+                    hatMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xffdd44, // Gold crown
+                        roughness: 0.2,
+                        metalness: 0.9,
+                        emissive: 0xffdd44,
+                        emissiveIntensity: 0.4
+                    });
+                }
+                
+                const hat = new THREE.Mesh(hatGeometry, hatMaterial);
+                hat.position.y = 0.8;
+                hat.castShadow = true;
+                enemyGroup.add(hat);
+                
+                // Add crown spikes or hat decoration
+                if (this.level === 3) {
+                    // Crown spikes
+                    const spikeGeometry = new THREE.ConeGeometry(0.05, 0.15, 4);
+                    const spikeMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xffdd44,
+                        roughness: 0.2,
+                        metalness: 0.9,
+                        emissive: 0xffdd44,
+                        emissiveIntensity: 0.4
+                    });
+                    
+                    for (let i = 0; i < 5; i++) {
+                        const angle = (i / 5) * Math.PI * 2;
+                        const spike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+                        spike.position.set(
+                            Math.cos(angle) * 0.25,
+                            0.9,
+                            Math.sin(angle) * 0.25
+                        );
+                        spike.castShadow = true;
+                        enemyGroup.add(spike);
+                    }
+                    
+                    // Add a gem to the crown
+                    const gemGeometry = new THREE.OctahedronGeometry(0.08, 1);
+                    const gemMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xff0088,
+                        roughness: 0.1,
+                        metalness: 0.9,
+                        emissive: 0xff0088,
+                        emissiveIntensity: 0.6
+                    });
+                    
+                    const gem = new THREE.Mesh(gemGeometry, gemMaterial);
+                    gem.position.set(0, 0.95, 0.15);
+                    gem.castShadow = true;
+                    enemyGroup.add(gem);
+                } else {
+                    // Hat star for level 2
+                    const starGeometry = new THREE.OctahedronGeometry(0.08, 0);
+                    const starMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xffff00,
+                        roughness: 0.1,
+                        metalness: 0.9,
+                        emissive: 0xffff00,
+                        emissiveIntensity: 0.6
+                    });
+                    
+                    const star = new THREE.Mesh(starGeometry, starMaterial);
+                    star.position.set(0, 1.05, 0);
+                    star.castShadow = true;
+                    enemyGroup.add(star);
+                }
+            }
+            
+            // Add a cape for level 3 enemies
+            if (this.level === 3) {
+                const capeGeometry = new THREE.CylinderGeometry(0.3, 0.4, 0.6, 8, 1, true, Math.PI/2, Math.PI);
+                const capeMaterial = new THREE.MeshStandardMaterial({
+                    color: accentColor,
+                    roughness: 0.7,
+                    metalness: 0.2,
+                    side: THREE.DoubleSide,
+                    emissive: accentColor,
+                    emissiveIntensity: 0.2
+                });
+                
+                const cape = new THREE.Mesh(capeGeometry, capeMaterial);
+                cape.position.set(0, 0.4, -0.2);
+                cape.rotation.x = Math.PI / 10;
+                cape.castShadow = true;
+                enemyGroup.add(cape);
+            }
+            
             // Create enemy eyes
             const eyeGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-            const eyeMaterial = new THREE.MeshStandardMaterial({ 
-                color: eyeColor,
-                emissive: eyeColor,
-                emissiveIntensity: 0.3,
-                roughness: 0.3,
-                metalness: 0.5
-            });
-            
             const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
             leftEye.position.set(-0.15, 0.5, 0.3);
             leftEye.castShadow = true;
@@ -137,12 +264,6 @@ class Enemy {
             
             // Create enemy pupils
             const pupilGeometry = new THREE.SphereGeometry(0.05, 12, 12);
-            const pupilMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x000000,
-                roughness: 0.1,
-                metalness: 0.1
-            });
-            
             const leftPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
             leftPupil.position.set(-0.15, 0.5, 0.39);
             
@@ -151,12 +272,6 @@ class Enemy {
             
             // Add eyebrows (angry expression)
             const eyebrowGeometry = new THREE.BoxGeometry(0.12, 0.03, 0.03);
-            const eyebrowMaterial = new THREE.MeshStandardMaterial({
-                color: 0x000000,
-                roughness: 0.8,
-                metalness: 0.1
-            });
-            
             const leftEyebrow = new THREE.Mesh(eyebrowGeometry, eyebrowMaterial);
             leftEyebrow.position.set(-0.15, 0.6, 0.32);
             leftEyebrow.rotation.z = -0.3;
@@ -167,11 +282,6 @@ class Enemy {
             
             // Create mouth (evil grin)
             const mouthGeometry = new THREE.TorusGeometry(0.2, 0.03, 8, 12, Math.PI);
-            const mouthMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffffff,
-                roughness: 0.3,
-                metalness: 0.1
-            });
             const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
             mouth.position.set(0, 0.35, 0.35);
             mouth.rotation.x = -Math.PI / 2;
@@ -202,6 +312,141 @@ class Enemy {
             rightArm.position.set(0.35, 0.4, 0);
             rightArm.rotation.z = -Math.PI / 2;
             rightArm.castShadow = true;
+            
+            // Add weapon for level 2 and 3 enemies
+            if (this.level >= 2) {
+                let weaponGeometry, weaponMaterial;
+                
+                if (this.level === 2) {
+                    // Magic wand for level 2
+                    weaponGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.4, 8);
+                    weaponMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x663300,
+                        roughness: 0.7,
+                        metalness: 0.3
+                    });
+                    
+                    const wand = new THREE.Mesh(weaponGeometry, weaponMaterial);
+                    wand.position.set(0.6, 0.4, 0);
+                    wand.rotation.z = -Math.PI / 2;
+                    wand.castShadow = true;
+                    enemyGroup.add(wand);
+                    
+                    // Add wand tip
+                    const tipGeometry = new THREE.SphereGeometry(0.04, 8, 8);
+                    const tipMaterial = new THREE.MeshStandardMaterial({
+                        color: accentColor,
+                        roughness: 0.1,
+                        metalness: 0.9,
+                        emissive: accentColor,
+                        emissiveIntensity: 0.8
+                    });
+                    
+                    const tip = new THREE.Mesh(tipGeometry, tipMaterial);
+                    tip.position.set(0.8, 0.4, 0);
+                    tip.castShadow = true;
+                    enemyGroup.add(tip);
+                    
+                    // Add magic particles
+                    const particleGroup = new THREE.Group();
+                    const particleCount = 5;
+                    const particleGeometry = new THREE.SphereGeometry(0.02, 4, 4);
+                    const particleMaterial = new THREE.MeshStandardMaterial({
+                        color: accentColor,
+                        roughness: 0.1,
+                        metalness: 0.9,
+                        emissive: accentColor,
+                        emissiveIntensity: 0.8,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    
+                    for (let i = 0; i < particleCount; i++) {
+                        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                        const angle = Math.random() * Math.PI * 2;
+                        const radius = 0.05 + Math.random() * 0.05;
+                        particle.position.set(
+                            0.8 + Math.cos(angle) * radius,
+                            0.4 + Math.sin(angle) * radius,
+                            Math.random() * 0.1 - 0.05
+                        );
+                        particle.userData = {
+                            angle: Math.random() * Math.PI * 2,
+                            radius: radius,
+                            speed: 0.01 + Math.random() * 0.02,
+                            centerX: 0.8,
+                            centerY: 0.4
+                        };
+                        particleGroup.add(particle);
+                    }
+                    
+                    enemyGroup.add(particleGroup);
+                    this.magicParticles = particleGroup;
+                } else {
+                    // Trident/scepter for level 3
+                    weaponGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8);
+                    weaponMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xdddddd,
+                        roughness: 0.2,
+                        metalness: 0.9
+                    });
+                    
+                    const scepter = new THREE.Mesh(weaponGeometry, weaponMaterial);
+                    scepter.position.set(0.6, 0.4, 0);
+                    scepter.rotation.z = -Math.PI / 2;
+                    scepter.castShadow = true;
+                    enemyGroup.add(scepter);
+                    
+                    // Add trident head
+                    const headGeometry = new THREE.ConeGeometry(0.06, 0.15, 3);
+                    const headMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xffdd44,
+                        roughness: 0.2,
+                        metalness: 0.9,
+                        emissive: 0xffdd44,
+                        emissiveIntensity: 0.4
+                    });
+                    
+                    const head = new THREE.Mesh(headGeometry, headMaterial);
+                    head.position.set(0.85, 0.4, 0);
+                    head.rotation.z = -Math.PI / 2;
+                    head.castShadow = true;
+                    enemyGroup.add(head);
+                    
+                    // Add side prongs
+                    for (let i = -1; i <= 1; i += 2) {
+                        const prongGeometry = new THREE.ConeGeometry(0.04, 0.12, 3);
+                        const prong = new THREE.Mesh(prongGeometry, headMaterial);
+                        prong.position.set(0.8, 0.4 + (i * 0.08), 0);
+                        prong.rotation.z = -Math.PI / 2;
+                        prong.castShadow = true;
+                        enemyGroup.add(prong);
+                    }
+                }
+            }
+            
+            // Add aura effect for level 3 enemies
+            if (this.level === 3) {
+                const auraGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+                const auraMaterial = new THREE.MeshStandardMaterial({
+                    color: accentColor,
+                    roughness: 1.0,
+                    metalness: 0.0,
+                    transparent: true,
+                    opacity: 0.3,
+                    side: THREE.DoubleSide,
+                    emissive: accentColor,
+                    emissiveIntensity: 0.5
+                });
+                
+                const aura = new THREE.Mesh(auraGeometry, auraMaterial);
+                aura.position.y = 0.4;
+                aura.scale.set(1.2, 1.2, 1.2);
+                enemyGroup.add(aura);
+                
+                // Store for animation
+                this.aura = aura;
+            }
             
             // Create hands
             const handGeometry = new THREE.SphereGeometry(0.1, 12, 12);
@@ -478,6 +723,42 @@ class Enemy {
                         this.rightEye.scale.y = originalScaleY;
                     }
                 }, 100);
+            }
+            
+            // Animate magic particles for level 2 enemies
+            if (this.level === 2 && this.magicParticles) {
+                this.magicParticles.children.forEach(particle => {
+                    if (particle.userData) {
+                        // Update angle
+                        particle.userData.angle += particle.userData.speed;
+                        
+                        // Calculate new position
+                        const x = particle.userData.centerX + Math.cos(particle.userData.angle) * particle.userData.radius;
+                        const y = particle.userData.centerY + Math.sin(particle.userData.angle) * particle.userData.radius;
+                        
+                        // Update position
+                        particle.position.set(x, y, particle.position.z);
+                        
+                        // Pulse size
+                        const scale = 0.8 + Math.sin(Date.now() * 0.01 + particle.userData.angle) * 0.2;
+                        particle.scale.set(scale, scale, scale);
+                    }
+                });
+            }
+            
+            // Animate aura for level 3 enemies
+            if (this.level === 3 && this.aura) {
+                // Pulse the aura
+                const pulseScale = 1.2 + Math.sin(idleTime * 3) * 0.1;
+                this.aura.scale.set(pulseScale, pulseScale, pulseScale);
+                
+                // Rotate the aura slightly
+                this.aura.rotation.y += 0.005;
+                
+                // Pulse opacity
+                if (this.aura.material) {
+                    this.aura.material.opacity = 0.2 + Math.abs(Math.sin(idleTime * 2)) * 0.2;
+                }
             }
             
             // Think about next move
@@ -757,20 +1038,27 @@ class Enemy {
         this.isAlive = false;
         
         // Create death effect
-        const particleCount = 10;
+        const particleCount = 15 + (this.level * 5); // More particles for higher level enemies
         const particles = new THREE.Group();
         
+        // Get enemy color based on level
+        const enemyColor = this.level === 1 ? 0xff5544 : 
+                          this.level === 2 ? 0x5599ff : 
+                          0x55dd55;
+        
+        // Get accent color based on level
+        const accentColor = this.level === 1 ? 0xffdd44 : 
+                           this.level === 2 ? 0x44ffdd : 
+                           0xffff44;
+        
+        // Create main explosion particles
         for (let i = 0; i < particleCount; i++) {
-            const size = 0.1 + Math.random() * 0.1;
+            const size = 0.05 + Math.random() * 0.15;
             const geometry = new THREE.SphereGeometry(size, 8, 8);
             const material = new THREE.MeshStandardMaterial({
-                color: this.level === 1 ? 0xff0000 :
-                       this.level === 2 ? 0x0000ff :
-                       0x00ff00,
-                emissive: this.level === 1 ? 0xff0000 :
-                         this.level === 2 ? 0x0000ff :
-                         0x00ff00,
-                emissiveIntensity: 0.7,
+                color: i % 3 === 0 ? accentColor : enemyColor,
+                emissive: i % 3 === 0 ? accentColor : enemyColor,
+                emissiveIntensity: 0.8,
                 transparent: true,
                 opacity: 1.0,
                 alphaTest: 0.1,
@@ -778,28 +1066,79 @@ class Enemy {
             });
             
             const particle = new THREE.Mesh(geometry, material);
+            
+            // Distribute particles in a sphere
+            const phi = Math.acos(-1 + (2 * i) / particleCount);
+            const theta = Math.sqrt(particleCount * Math.PI) * phi;
+            const radius = 0.1 + Math.random() * 0.3;
+            
             particle.position.set(
-                (Math.random() - 0.5) * 0.5,
-                Math.random() * 0.7,
-                (Math.random() - 0.5) * 0.5
+                radius * Math.sin(phi) * Math.cos(theta),
+                radius * Math.sin(phi) * Math.sin(theta),
+                radius * Math.cos(phi)
             );
             
+            // Add velocity for animation
             particle.userData.velocity = {
-                x: (Math.random() - 0.5) * 0.05,
-                y: 0.05 + Math.random() * 0.05,
-                z: (Math.random() - 0.5) * 0.05
+                x: particle.position.x * (0.03 + Math.random() * 0.03),
+                y: particle.position.y * (0.03 + Math.random() * 0.03) + 0.05,
+                z: particle.position.z * (0.03 + Math.random() * 0.03)
+            };
+            
+            // Add rotation for animation
+            particle.userData.rotation = {
+                x: Math.random() * 0.1,
+                y: Math.random() * 0.1,
+                z: Math.random() * 0.1
             };
             
             particles.add(particle);
         }
         
-        particles.position.set(this.x, this.y, this.z);
+        // Add level-specific death effects
+        if (this.level >= 2) {
+            // Add energy ring for level 2+
+            const ringGeometry = new THREE.TorusGeometry(0.3, 0.05, 8, 24);
+            const ringMaterial = new THREE.MeshStandardMaterial({
+                color: accentColor,
+                emissive: accentColor,
+                emissiveIntensity: 0.9,
+                transparent: true,
+                opacity: 1.0
+            });
+            
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.rotation.x = Math.PI / 2;
+            ring.userData.scale = 0.1;
+            ring.userData.expandRate = 0.05;
+            ring.scale.set(0.1, 0.1, 0.1);
+            particles.add(ring);
+            
+            // Add second ring perpendicular to first
+            if (this.level === 3) {
+                const ring2 = new THREE.Mesh(ringGeometry, ringMaterial.clone());
+                ring2.rotation.y = Math.PI / 2;
+                ring2.userData.scale = 0.1;
+                ring2.userData.expandRate = 0.04;
+                ring2.scale.set(0.1, 0.1, 0.1);
+                particles.add(ring2);
+                
+                // Add third ring for level 3
+                const ring3 = new THREE.Mesh(ringGeometry, ringMaterial.clone());
+                ring3.userData.scale = 0.1;
+                ring3.userData.expandRate = 0.06;
+                ring3.scale.set(0.1, 0.1, 0.1);
+                particles.add(ring3);
+            }
+        }
+        
+        particles.position.set(this.x, 0.4, this.z);
         window.scene.add(particles);
         
         // Add particle system to grid entities
         const particleSystem = {
             mesh: particles,
-            lifetime: 1000,
+            lifetime: 1500, // Longer lifetime for more impressive effect
             update: function(deltaTime) {
                 this.lifetime -= deltaTime;
                 
@@ -816,21 +1155,46 @@ class Enemy {
                 }
                 
                 particles.children.forEach(particle => {
-                    particle.position.x += particle.userData.velocity.x;
-                    particle.position.y += particle.userData.velocity.y;
-                    particle.position.z += particle.userData.velocity.z;
-                    
-                    particle.userData.velocity.y -= 0.001;
-                    
-                    if (particle.material) {
-                        // Only reduce opacity in the last half of lifetime
-                        if (this.lifetime < 500) {
-                            particle.material.opacity = this.lifetime / 500;
+                    // Handle expanding rings differently
+                    if (particle.userData.expandRate) {
+                        // Expand the ring
+                        particle.userData.scale += particle.userData.expandRate;
+                        particle.scale.set(
+                            particle.userData.scale, 
+                            particle.userData.scale, 
+                            particle.userData.scale
+                        );
+                        
+                        // Fade out as it expands
+                        if (particle.material) {
+                            particle.material.opacity = Math.min(1.0, this.lifetime / 1000);
                         }
                         
-                        // Add rotation for better visual effect
-                        particle.rotation.x += 0.02;
-                        particle.rotation.y += 0.02;
+                        // Add some rotation
+                        particle.rotation.z += 0.01;
+                        return;
+                    }
+                    
+                    // Regular particles
+                    if (particle.userData.velocity) {
+                        particle.position.x += particle.userData.velocity.x;
+                        particle.position.y += particle.userData.velocity.y;
+                        particle.position.z += particle.userData.velocity.z;
+                        
+                        // Add gravity
+                        particle.userData.velocity.y -= 0.001;
+                        
+                        // Add rotation
+                        if (particle.userData.rotation) {
+                            particle.rotation.x += particle.userData.rotation.x;
+                            particle.rotation.y += particle.userData.rotation.y;
+                            particle.rotation.z += particle.userData.rotation.z;
+                        }
+                        
+                        // Fade out
+                        if (particle.material) {
+                            particle.material.opacity = this.lifetime / 1500;
+                        }
                     }
                 });
             }
