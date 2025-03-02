@@ -58,61 +58,67 @@ else
         
         case $type in
             "player")
-                prompt="A cute cartoon bomberman character with a round body, wearing a blue and white outfit with a helmet, standing in a heroic pose. Pixel art style, vibrant colors, facing forward, on a transparent background."
+                prompt="A cute cartoon bomberman character with a round body, wearing a blue and white outfit with a helmet, standing in a heroic pose. Pixel art style, vibrant colors, facing forward, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "enemy")
-                prompt="A menacing cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant colors, facing forward, on a transparent background."
+                prompt="A menacing cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant colors, facing forward, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "bomb")
-                prompt="A classic round black bomb with a lit fuse on top, cartoon style. Pixel art style, vibrant colors, on a transparent background."
+                prompt="A classic round black bomb with a lit fuse on top, cartoon style. Pixel art style, vibrant colors, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "explosion")
-                prompt="A stylized cartoon explosion with bright orange and yellow flames radiating outward in a star pattern. Pixel art style, vibrant colors, on a transparent background."
+                prompt="A stylized cartoon explosion with bright orange and yellow flames radiating outward in a star pattern. Pixel art style, vibrant colors, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "wall")
-                prompt="A solid brick wall texture for a bomberman game, with detailed cracks and shading. Pixel art style, seamless pattern, on a transparent background."
+                prompt="A solid brick wall texture for a bomberman game, with detailed cracks and shading. Pixel art style, seamless pattern, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "breakable")
-                prompt="A wooden crate texture that looks breakable, with visible planks and nails. Pixel art style, seamless pattern, on a transparent background."
+                prompt="A wooden crate texture that looks breakable, with visible planks and nails. Pixel art style, seamless pattern, completely isolated on pure transparent background, no shadows or effects."
+                ;;
+            "metal_crate")
+                prompt="A metallic crate with rivets and worn edges, industrial style. Pixel art style, seamless pattern, completely isolated on pure transparent background, no shadows or effects."
+                ;;
+            "ice_block")
+                prompt="A translucent ice block with crystalline structure and subtle blue tint. Pixel art style, seamless pattern, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "powerup")
-                prompt="A glowing power-up item for a bomberman game, spherical with a special symbol inside. Pixel art style, vibrant colors, on a transparent background."
+                prompt="A glowing power-up item for a bomberman game, spherical with a special symbol inside. Pixel art style, vibrant colors, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "floor")
-                prompt="A seamless floor texture for a bomberman game, with subtle patterns. Pixel art style, top-down view, on a transparent background."
+                prompt="A seamless floor texture for a bomberman game, with subtle patterns. Pixel art style, top-down view, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "floor_ice")
-                prompt="A seamless ice floor texture for a bomberman game, with light blue color and subtle cracks. Pixel art style, top-down view, on a transparent background."
+                prompt="A seamless ice floor texture for a bomberman game, with light blue color and subtle cracks. Pixel art style, top-down view, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "floor_sand")
-                prompt="A seamless sand floor texture for a bomberman game, with light tan color and subtle grain patterns. Pixel art style, top-down view, on a transparent background."
+                prompt="A seamless sand floor texture for a bomberman game, with light tan color and subtle grain patterns. Pixel art style, top-down view, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "enemy_red")
-                prompt="A menacing red cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant red color scheme, facing forward, on a transparent background."
+                prompt="A menacing red cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant red color scheme, facing forward, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "enemy_blue")
-                prompt="A menacing blue cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant blue color scheme, facing forward, on a transparent background."
+                prompt="A menacing blue cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant blue color scheme, facing forward, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "enemy_green")
-                prompt="A menacing green cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant green color scheme, facing forward, on a transparent background."
+                prompt="A menacing green cartoon enemy character for a bomberman game, with angry eyes and a sinister smile. Pixel art style, vibrant green color scheme, facing forward, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "powerup_bomb")
-                prompt="A bomb power-up item for a bomberman game, showing a small bomb icon inside a glowing orb. Pixel art style, vibrant colors, on a transparent background."
+                prompt="A bomb power-up item for a bomberman game, showing a small bomb icon inside a glowing orb. Pixel art style, vibrant colors, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "powerup_range")
-                prompt="A range power-up item for a bomberman game, showing expanding arrows inside a glowing orb. Pixel art style, vibrant colors, on a transparent background."
+                prompt="A range power-up item for a bomberman game, showing expanding arrows inside a glowing orb. Pixel art style, vibrant colors, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "powerup_speed")
-                prompt="A speed power-up item for a bomberman game, showing a lightning bolt inside a glowing orb. Pixel art style, vibrant colors, on a transparent background."
+                prompt="A speed power-up item for a bomberman game, showing a lightning bolt inside a glowing orb. Pixel art style, vibrant colors, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "crystal")
-                prompt="A shiny crystal gem for a bomberman game, with faceted surfaces and internal glow. Pixel art style, vibrant colors, on a transparent background."
+                prompt="A shiny crystal gem for a bomberman game, with faceted surfaces and internal glow. Pixel art style, vibrant colors, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             "barrel")
-                prompt="A wooden barrel texture for a bomberman game, round with metal bands. Pixel art style, top-down view, on a transparent background."
+                prompt="A wooden barrel texture for a bomberman game, round with metal bands. Pixel art style, top-down view, completely isolated on pure transparent background, no shadows or effects."
                 ;;
             *)
-                prompt="A game asset for a bomberman-style game with vibrant colors and cartoon style. Pixel art style, on a transparent background."
+                prompt="A game asset for a bomberman-style game with vibrant colors and cartoon style. Pixel art style, completely isolated on pure transparent background, no shadows or effects."
                 ;;
         esac
         
@@ -199,8 +205,16 @@ for webp_file in temp_images/${TEXTURE_TYPE}_*.webp; do
         
         echo "Converting $webp_file to $output_file..."
         
-        # Convert webp to png and remove background
-        convert "$webp_file" -transparent white "$output_file"
+        # Enhanced background removal and conversion process
+        convert "$webp_file" \
+            -fuzz 5% \
+            -transparent white \
+            -fill none \
+            -draw "color 0,0 floodfill" \
+            -channel alpha \
+            -blur 0x0.5 \
+            -level 50%,100% \
+            "$output_file"
         
         echo "Created $output_file"
     fi
