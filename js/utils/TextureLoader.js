@@ -41,24 +41,50 @@ async function loadTextures() {
             console.log('TextureLoader created successfully');
             
             const texturesToLoad = {
+                // Player textures
                 player: 'assets/textures/player.png',
+                playerAlt: 'assets/textures/player_alt.png',
+                playerGirl: 'assets/textures/player_girl.png',
+                
+                // Enemy textures
+                enemy: 'assets/textures/enemy.png',
                 enemyRed: 'assets/textures/enemy_red.png',
                 enemyBlue: 'assets/textures/enemy_blue.png',
                 enemyGreen: 'assets/textures/enemy_green.png',
+                enemyBoss: 'assets/textures/enemy_boss.png',
+                
+                // Bomb textures
                 bomb: 'assets/textures/bomb.png',
+                bombAlt: 'assets/textures/bomb_alt.png',
+                
+                // Explosion textures
                 explosion: 'assets/textures/explosion.png',
+                explosionBlue: 'assets/textures/explosion_blue.png',
+                
+                // Wall textures
                 wall: 'assets/textures/wall.png',
-                crate: 'assets/textures/crate.png',
+                wallStone: 'assets/textures/wall_stone.png',
+                
+                // Breakable block textures
+                crate: 'assets/textures/breakable.png',
+                metalCrate: 'assets/textures/metal_crate.png',
+                iceBlock: 'assets/textures/ice_block.png',
                 barrel: 'assets/textures/barrel.png',
                 crystal: 'assets/textures/crystal.png',
-                powerupRange: 'assets/textures/powerup_range.png',
+                
+                // Powerup textures
+                powerup: 'assets/textures/powerup.png',
                 powerupBomb: 'assets/textures/powerup_bomb.png',
+                powerupRange: 'assets/textures/powerup_range.png',
                 powerupSpeed: 'assets/textures/powerup_speed.png',
+                powerupLife: 'assets/textures/powerup_life.png',
+                powerupShield: 'assets/textures/powerup_shield.png',
+                
+                // Floor textures
                 floor: 'assets/textures/floor.png',
                 floorSand: 'assets/textures/floor_sand.png',
                 floorIce: 'assets/textures/floor_ice.png',
-                metal_crate: 'assets/textures/metal_crate.png',
-                ice_block: 'assets/textures/ice_block.png'
+                floorLava: 'assets/textures/floor_lava.png'
             };
             
             console.log('Textures to load:', Object.keys(texturesToLoad).length);
@@ -199,6 +225,23 @@ async function loadTextures() {
                             texture.colorSpace = THREE.SRGBColorSpace;
                             texture.minFilter = THREE.LinearFilter;
                             texture.magFilter = THREE.LinearFilter;
+                            
+                            // Ensure proper alpha channel handling for textures that need transparency
+                            if (key.includes('powerup') || 
+                                key.includes('player') || 
+                                key.includes('enemy') || 
+                                key.includes('bomb')) {
+                                texture.premultiplyAlpha = false;
+                            }
+                            
+                            // Special handling for breakable block textures to avoid transparency issues
+                            if (key.includes('crate') || key.includes('breakable') || 
+                                key.includes('crystal') || key.includes('barrel') || 
+                                key.includes('iceBlock') || key.includes('metal')) {
+                                texture.premultiplyAlpha = true;
+                                texture.alphaTest = 0.5; // Add alpha test to avoid semi-transparent pixels
+                            }
+                            
                             loadedTextures[key] = texture;
                             loadedCount++;
                             
@@ -256,24 +299,24 @@ async function loadTextures() {
                 );
             };
             
-            // Load each texture
-            Object.entries(texturesToLoad).forEach(([key, path]) => {
+            // Load all textures
+            for (const [key, path] of Object.entries(texturesToLoad)) {
                 loadTexture(key, path);
-            });
-            
+            }
         } catch (error) {
             console.error('Error in loadTextures:', error);
-            updateLoadingProgress('Error loading textures: ' + error.message);
+            updateLoadingProgress(`Error loading textures: ${error.message}`);
             reject(error);
         }
     });
 }
 
-// Helper function to update loading progress with a fallback
+// Function to update loading progress
 function updateLoadingProgress(message) {
-    console.log(message);
     if (typeof window.updateLoadingProgress === 'function') {
         window.updateLoadingProgress(message);
+    } else {
+        console.log('Loading progress:', message);
     }
 }
 
@@ -309,10 +352,8 @@ function setupLighting() {
         }
         
         // Verify that essential THREE components are available
-        if (!THREE.AmbientLight || !THREE.DirectionalLight) {
-            console.error('THREE lighting components are not available:', 
-                          'AmbientLight:', !!THREE.AmbientLight, 
-                          'DirectionalLight:', !!THREE.DirectionalLight);
+        if (!THREE.AmbientLight || !THREE.DirectionalLight || !THREE.PointLight || !THREE.SpotLight) {
+            console.error('THREE lighting components are not available');
             return;
         }
         
@@ -322,38 +363,81 @@ function setupLighting() {
             return;
         }
         
-        // Ambient light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        // Remove any existing lights
+        const existingLights = window.scene.children.filter(child => 
+            child instanceof THREE.AmbientLight || 
+            child instanceof THREE.DirectionalLight || 
+            child instanceof THREE.PointLight ||
+            child instanceof THREE.SpotLight
+        );
+        
+        existingLights.forEach(light => {
+            window.scene.remove(light);
+        });
+        
+        // Ambient light - slightly warmer color
+        const ambientLight = new THREE.AmbientLight(0xffffeb, 0.4);
         window.scene.add(ambientLight);
         console.log('Ambient light added');
 
-        // Main directional light (sun)
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 20, 10);
+        // Main directional light (sun) - warmer color
+        const directionalLight = new THREE.DirectionalLight(0xffffcc, 1.0);
+        directionalLight.position.set(15, 25, 15);
         directionalLight.target.position.set(0, 0, 0);
         directionalLight.castShadow = true;
         
-        // Adjust shadow camera to cover the entire scene
-        const d = 15;
+        // Improve shadow quality
+        const d = 20;
         directionalLight.shadow.camera.left = -d;
         directionalLight.shadow.camera.right = d;
         directionalLight.shadow.camera.top = d;
         directionalLight.shadow.camera.bottom = -d;
         directionalLight.shadow.camera.near = 0.5;
         directionalLight.shadow.camera.far = 50;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        directionalLight.shadow.bias = -0.001;
+        directionalLight.shadow.mapSize.width = 4096;
+        directionalLight.shadow.mapSize.height = 4096;
+        directionalLight.shadow.bias = -0.0005;
+        directionalLight.shadow.normalBias = 0.02;
         
         window.scene.add(directionalLight);
         window.scene.add(directionalLight.target);
         console.log('Directional light added');
 
-        // Add fill light from the opposite side
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-        fillLight.position.set(-10, 10, -10);
+        // Add fill light from the opposite side - cooler color for contrast
+        const fillLight = new THREE.DirectionalLight(0xccddff, 0.4);
+        fillLight.position.set(-15, 10, -15);
         window.scene.add(fillLight);
         console.log('Fill light added');
+        
+        // Add a subtle point light to enhance the center of the scene
+        const centerLight = new THREE.PointLight(0xffffdd, 0.6, 20);
+        centerLight.position.set(0, 5, 0);
+        centerLight.castShadow = true;
+        centerLight.shadow.mapSize.width = 1024;
+        centerLight.shadow.mapSize.height = 1024;
+        centerLight.shadow.bias = -0.0005;
+        window.scene.add(centerLight);
+        console.log('Center point light added');
+        
+        // Add subtle colored rim lights for visual interest
+        const rimLight1 = new THREE.PointLight(0xffaa44, 0.3, 15);
+        rimLight1.position.set(10, 2, -10);
+        window.scene.add(rimLight1);
+        
+        const rimLight2 = new THREE.PointLight(0x44aaff, 0.3, 15);
+        rimLight2.position.set(-10, 2, 10);
+        window.scene.add(rimLight2);
+        console.log('Rim lights added');
+        
+        // Enable better shadows for the renderer
+        if (window.renderer) {
+            window.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            window.renderer.physicallyCorrectLights = true;
+            window.renderer.outputEncoding = THREE.sRGBEncoding;
+            window.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            window.renderer.toneMappingExposure = 1.2;
+        }
+        
     } catch (error) {
         console.error('Error in setupLighting:', error);
         // Don't throw the error, just log it to prevent game initialization from failing
@@ -367,6 +451,61 @@ function onWindowResize() {
             window.camera.aspect = window.innerWidth / window.innerHeight;
             window.camera.updateProjectionMatrix();
             window.renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Check if we're on mobile after resize
+            const isMobile = window.isMobileDevice && window.isMobileDevice();
+            
+            // Adjust camera for mobile/desktop view when orientation changes
+            if (isMobile) {
+                // Only update camera position if it's significantly different
+                // to avoid jarring changes during small resizes
+                const distanceFromMobilePosition = Math.sqrt(
+                    Math.pow(window.camera.position.y - 10, 2) + 
+                    Math.pow(window.camera.position.z - 6, 2)
+                );
+                
+                // If camera is far from the ideal mobile position, adjust it
+                if (distanceFromMobilePosition > 3) {
+                    // Smoothly transition to mobile view
+                    const targetY = 10;
+                    const targetZ = 6;
+                    
+                    // Move 20% of the way to the target position
+                    window.camera.position.y += (targetY - window.camera.position.y) * 0.2;
+                    window.camera.position.z += (targetZ - window.camera.position.z) * 0.2;
+                    
+                    // Update controls if they exist
+                    if (window.controls) {
+                        window.controls.minDistance = 3;
+                        window.controls.maxDistance = 12;
+                        window.controls.maxPolarAngle = Math.PI / 2.5;
+                        window.controls.update();
+                    }
+                }
+            } else {
+                // For desktop, only adjust if we were previously in mobile view
+                const distanceFromDesktopPosition = Math.sqrt(
+                    Math.pow(window.camera.position.y - 8, 2) + 
+                    Math.pow(window.camera.position.z - 8, 2)
+                );
+                
+                if (distanceFromDesktopPosition > 3) {
+                    // Smoothly transition to desktop view
+                    const targetY = 8;
+                    const targetZ = 8;
+                    
+                    window.camera.position.y += (targetY - window.camera.position.y) * 0.2;
+                    window.camera.position.z += (targetZ - window.camera.position.z) * 0.2;
+                    
+                    // Update controls if they exist
+                    if (window.controls) {
+                        window.controls.minDistance = 4;
+                        window.controls.maxDistance = 15;
+                        window.controls.maxPolarAngle = Math.PI / 2;
+                        window.controls.update();
+                    }
+                }
+            }
         }
     } catch (error) {
         console.error('Error in onWindowResize:', error);

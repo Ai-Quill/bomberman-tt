@@ -8,7 +8,7 @@ function getThree() {
 }
 
 class Explosion {
-    constructor(grid, x, y, range) {
+    constructor(grid, x, y, range, type = 'default') {
         try {
             // Get THREE safely
             const THREE = getThree();
@@ -20,6 +20,7 @@ class Explosion {
             this.range = range;
             this.lifetime = 1000; // 1 second
             this.parts = [];
+            this.type = type; // Store explosion type
             
             // Create explosion center
             this.createExplosionPart(x, y, 'center');
@@ -106,7 +107,7 @@ class Explosion {
         }
     }
     
-    createExplosionPart(x, y, type) {
+    createExplosionPart(x, y, partType) {
         try {
             // Get THREE safely
             const THREE = this.THREE || getThree();
@@ -114,28 +115,106 @@ class Explosion {
             // Set explosion in grid
             this.grid.setCellType(x, y, 4); // 4 = explosion
             
-            // Create explosion mesh
-            const geometry = new THREE.BoxGeometry(0.8, 0.4, 0.8);
-            const material = new THREE.MeshStandardMaterial({
-                map: window.textures.explosion,
-                transparent: true,
-                opacity: 0.8,
-                emissive: 0xffff00,
-                emissiveIntensity: 0.5
-            });
+            let geometry, material;
             
-            const mesh = new THREE.Mesh(geometry, material);
-            const worldPos = this.grid.gridToWorld(x, y);
-            mesh.position.set(worldPos.x, 0.2, worldPos.z);
-            
-            window.scene.add(mesh);
-            
-            // Store for cleanup
-            this.parts.push({
-                x: x,
-                y: y,
-                mesh: mesh
-            });
+            if (this.type === 'alt') {
+                // Digital/electric explosion
+                geometry = new THREE.BoxGeometry(0.8, 0.4, 0.8);
+                
+                // Create particle system for digital explosion
+                const particleCount = 50;
+                const particleGeometry = new THREE.BufferGeometry();
+                const particlePositions = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    particlePositions[i3] = (Math.random() - 0.5) * 0.8;
+                    particlePositions[i3 + 1] = Math.random() * 0.8;
+                    particlePositions[i3 + 2] = (Math.random() - 0.5) * 0.8;
+                }
+                
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+                
+                const particleMaterial = new THREE.PointsMaterial({
+                    color: 0x00ffff,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: 0x00ffff,
+                    emissiveIntensity: 0.8
+                });
+                
+                const particles = new THREE.Points(particleGeometry, particleMaterial);
+                
+                // Main explosion material
+                material = new THREE.MeshStandardMaterial({
+                    color: 0x00ffff,
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: 0x00ffff,
+                    emissiveIntensity: 0.8,
+                    wireframe: partType === 'center' ? false : true,
+                    alphaTest: 0.5,
+                    side: THREE.FrontSide
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                const worldPos = this.grid.gridToWorld(x, y);
+                mesh.position.set(worldPos.x, 0.2, worldPos.z);
+                
+                // Create group to hold mesh and particles
+                const group = new THREE.Group();
+                group.add(mesh);
+                group.add(particles);
+                
+                window.scene.add(group);
+                
+                // Store for cleanup
+                this.parts.push({
+                    x: x,
+                    y: y,
+                    mesh: group,
+                    particles: particles,
+                    particleGeometry: particleGeometry,
+                    particleMaterial: particleMaterial
+                });
+            } else {
+                // Default fire explosion
+                geometry = new THREE.BoxGeometry(0.8, 0.4, 0.8);
+                
+                // Different colors based on part type
+                let emissiveColor;
+                if (partType === 'center') {
+                    emissiveColor = 0xff5500; // Bright orange for center
+                } else if (partType === 'end') {
+                    emissiveColor = 0xff0000; // Red for end parts
+                } else {
+                    emissiveColor = 0xffaa00; // Yellow-orange for middle parts
+                }
+                
+                material = new THREE.MeshStandardMaterial({
+                    map: window.textures.explosion,
+                    transparent: true,
+                    opacity: 0.9,
+                    emissive: emissiveColor,
+                    emissiveIntensity: 0.7,
+                    alphaTest: 0.5,
+                    side: THREE.FrontSide
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                const worldPos = this.grid.gridToWorld(x, y);
+                mesh.position.set(worldPos.x, 0.2, worldPos.z);
+                
+                window.scene.add(mesh);
+                
+                // Store for cleanup
+                this.parts.push({
+                    x: x,
+                    y: y,
+                    mesh: mesh
+                });
+            }
         } catch (error) {
             console.error('Error creating explosion part:', error);
         }
@@ -156,7 +235,9 @@ class Explosion {
                      type === 'range' ? window.textures.powerupRange :
                      window.textures.powerupSpeed,
                 transparent: true,
-                opacity: 0.9
+                opacity: 1.0,
+                alphaTest: 0.5,
+                side: THREE.FrontSide
             });
             
             const mesh = new THREE.Mesh(geometry, material);
@@ -231,8 +312,23 @@ class Explosion {
                 window.scene.remove(part.mesh);
                 
                 // Cleanup
-                if (part.mesh.geometry) part.mesh.geometry.dispose();
-                if (part.mesh.material) part.mesh.material.dispose();
+                if (this.type === 'alt' && part.particleGeometry) {
+                    part.particleGeometry.dispose();
+                    part.particleMaterial.dispose();
+                }
+                
+                if (part.mesh.geometry) {
+                    // For group, we need to dispose children
+                    if (part.mesh.isGroup) {
+                        part.mesh.children.forEach(child => {
+                            if (child.geometry) child.geometry.dispose();
+                            if (child.material) child.material.dispose();
+                        });
+                    } else {
+                        part.mesh.geometry.dispose();
+                        if (part.mesh.material) part.mesh.material.dispose();
+                    }
+                }
             });
             
             // Remove from grid entities
@@ -241,13 +337,57 @@ class Explosion {
             // Update explosion effects
             this.parts.forEach(part => {
                 if (part.mesh) {
-                    // Pulsing effect
-                    const scale = 1 + Math.sin(this.lifetime * 0.01) * 0.2;
-                    part.mesh.scale.set(scale, 1, scale);
-                    
-                    // Fade out
-                    if (part.mesh.material) {
-                        part.mesh.material.opacity = this.lifetime / 1000;
+                    if (this.type === 'alt') {
+                        // Digital explosion effects
+                        // Rotate the particles
+                        if (part.particles) {
+                            part.particles.rotation.y += 0.05;
+                            part.particles.rotation.x += 0.03;
+                            
+                            // Pulse the particles
+                            const scale = 1 + Math.sin(this.lifetime * 0.01) * 0.3;
+                            part.particles.scale.set(scale, scale, scale);
+                            
+                            // Update particle opacity
+                            if (part.particleMaterial) {
+                                part.particleMaterial.opacity = this.lifetime / 1000;
+                            }
+                        }
+                        
+                        // Pulse the main mesh
+                        if (part.mesh.children && part.mesh.children[0]) {
+                            const mainMesh = part.mesh.children[0];
+                            mainMesh.scale.set(1, 1 + Math.sin(this.lifetime * 0.02) * 0.5, 1);
+                            
+                            if (mainMesh.material) {
+                                mainMesh.material.opacity = this.lifetime / 1000;
+                                // Smooth flicker effect instead of random
+                                const flickerBase = 0.8;
+                                const flickerAmount = 0.2;
+                                const flickerSpeed = 0.01;
+                                mainMesh.material.emissiveIntensity = flickerBase + 
+                                    (Math.sin(this.lifetime * flickerSpeed) * 0.5 + 0.5) * flickerAmount;
+                            }
+                        }
+                    } else {
+                        // Default explosion effects
+                        // Pulsing effect
+                        const scale = 1 + Math.sin(this.lifetime * 0.01) * 0.2;
+                        part.mesh.scale.set(scale, 1, scale);
+                        
+                        // Fade out
+                        if (part.mesh.material) {
+                            part.mesh.material.opacity = this.lifetime / 1000;
+                            
+                            // Smooth pulsing emissive intensity
+                            if (part.mesh.material.emissiveIntensity !== undefined) {
+                                const pulseBase = 0.5;
+                                const pulseAmount = 0.3;
+                                const pulseSpeed = 0.008;
+                                part.mesh.material.emissiveIntensity = pulseBase + 
+                                    (Math.sin(this.lifetime * pulseSpeed) * 0.5 + 0.5) * pulseAmount;
+                            }
+                        }
                     }
                 }
             });

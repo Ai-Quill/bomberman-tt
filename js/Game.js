@@ -31,6 +31,11 @@ import GameLoop from './classes/GameLoop.js';
 import { levels, createLevel, nextLevel } from './managers/LevelManager.js';
 import { loadTextures, showError, setupLighting, onWindowResize } from './utils/TextureLoader.js';
 
+// Check if we're on a mobile device
+window.isMobileDevice = () => {
+    return window.innerWidth <= 768 || 'ontouchstart' in window;
+};
+
 // Initialize the game immediately
 initializeGame();
 
@@ -41,6 +46,7 @@ function initializeGame() {
     window.nextLevel = nextLevel;
     window.createLevel = createLevel;
     window.showError = showError;
+    window.levels = levels;
     
     // Call init function
     if (typeof window.updateLoadingProgress === 'function') {
@@ -73,18 +79,30 @@ function init() {
             
             // Create scene
             window.scene = new window.THREE.Scene();
-            window.scene.background = new window.THREE.Color(0x87CEEB); // Sky blue background
+            window.scene.background = new window.THREE.Color(0x0a060f); // Dark purple background to match body
             console.log('Scene created');
             
             if (typeof window.updateLoadingProgress === 'function') {
                 window.updateLoadingProgress('Creating camera and renderer...');
             }
             
-            // Create camera
-            window.camera = new window.THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            window.camera.position.set(0, 10, 10);
-            window.camera.lookAt(0, 0, 0);
-            console.log('Camera created');
+            // Check if we're on mobile
+            const isMobile = window.isMobileDevice();
+            
+            // Create camera with different settings for mobile
+            if (isMobile) {
+                // Mobile camera settings - higher position for better overview
+                window.camera = new window.THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                window.camera.position.set(1, 10, 6); // Higher Y and closer Z for better top-down view
+                window.camera.lookAt(1, 0, 1);
+                console.log('Mobile camera created with adjusted settings');
+            } else {
+                // Desktop camera settings
+                window.camera = new window.THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+                window.camera.position.set(2, 8, 8);
+                window.camera.lookAt(1, 0, 1);
+                console.log('Desktop camera created');
+            }
 
             // Create renderer
             window.renderer = new window.THREE.WebGLRenderer({ antialias: true });
@@ -107,9 +125,37 @@ function init() {
                 window.controls.enableDamping = true;
                 window.controls.dampingFactor = 0.05;
                 window.controls.screenSpacePanning = false;
-                window.controls.minDistance = 5;
-                window.controls.maxDistance = 20;
-                window.controls.maxPolarAngle = Math.PI / 2;
+                
+                // Adjust controls for mobile
+                if (isMobile) {
+                    console.log('Mobile device detected, adjusting camera controls');
+                    window.controls.minDistance = 3;  // Allow closer zoom on mobile
+                    window.controls.maxDistance = 12; // Limit max zoom out
+                    window.controls.maxPolarAngle = Math.PI / 2.5; // Slightly more restricted angle
+                    window.controls.enableRotate = true;
+                    window.controls.enablePan = false;
+                    window.controls.enableZoom = true;
+                    window.controls.rotateSpeed = 0.7; // Slower rotation for better control
+                    window.controls.zoomSpeed = 0.7;   // Slower zoom for better control
+                    window.controls.touches = {
+                        ONE: window.THREE.TOUCH.ROTATE,
+                        TWO: window.THREE.TOUCH.DOLLY_PAN
+                    };
+                    
+                    // Set initial target to center of the level
+                    const levelData = levels[window.currentLevel - 1];
+                    if (levelData) {
+                        const centerX = Math.floor(levelData.width / 2);
+                        const centerZ = Math.floor(levelData.height / 2);
+                        window.controls.target.set(centerX, 0, centerZ);
+                    }
+                } else {
+                    // Desktop controls
+                    window.controls.minDistance = 4;
+                    window.controls.maxDistance = 15;
+                    window.controls.maxPolarAngle = Math.PI / 2;
+                }
+                
                 console.log('Controls created successfully');
             } catch (controlsError) {
                 console.error('Error creating controls:', controlsError);
@@ -213,6 +259,11 @@ function init() {
             try {
                 window.player = new Player(window.grid, window.grid.playerStartX || 1, window.grid.playerStartY || 1);
                 console.log('Player created');
+                
+                // Make player visible immediately but hide until start button is clicked
+                if (window.player.mesh) {
+                    window.player.mesh.visible = false;
+                }
             } catch (playerError) {
                 console.error('Error creating player:', playerError);
                 reject(playerError);
@@ -306,6 +357,12 @@ function resetGame() {
     // Clear all entities and breakable blocks
     if (window.grid) {
         // Clear entities
+        window.grid.entities.forEach(entity => {
+            // Properly clean up bombs
+            if (entity.constructor.name === 'Bomb') {
+                entity.forceRemove();
+            }
+        });
         window.grid.entities.length = 0;
         
         // Clear breakable blocks
@@ -401,7 +458,21 @@ function resetGame() {
     
     // Restart the game after a short delay to ensure cleanup is complete
     setTimeout(() => {
-        init();
+        init().then(() => {
+            // Show start button again after reset
+            const loadingElement = document.getElementById('loading');
+            const loadingProgressElement = document.getElementById('loadingProgress');
+            const startGameButton = document.getElementById('startGameButton');
+            
+            if (loadingElement && loadingProgressElement && startGameButton) {
+                loadingElement.style.display = 'block';
+                loadingProgressElement.textContent = "Game ready! Click 'Start Game' to begin.";
+                startGameButton.style.display = 'block';
+            }
+        }).catch(error => {
+            console.error('Error reinitializing game after reset:', error);
+            showError('Failed to restart game: ' + error.message);
+        });
     }, 100);
 }
 
